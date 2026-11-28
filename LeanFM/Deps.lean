@@ -86,6 +86,11 @@ def deps : List Dep :=
       test := "test -x .toolchains/go/bin/go", run := "make go-toolchain", provides := ["go"] }
   , { id := "ffmpeg", name := "FFmpeg", purpose := "the videos", targets := ["videos"], test := "command -v ffmpeg",
       apt := ["ffmpeg"], brew := ["ffmpeg"], provides := ["ffmpeg"] }
+  , { id := "videoenv", name := "the video environment (video/.conda: Python with Manim and Piper)",
+      purpose := "rendering and narrating the videos", targets := ["videos"],
+      test := "video/.conda/bin/python -c 'import manim, piper'",
+      apt := ["libcairo2-dev", "libpango1.0-dev", "pkg-config"], brew := ["cairo", "pango", "pkg-config"],
+      run := "if command -v conda >/dev/null; then conda create -y -p video/.conda python=3.11 pip && video/.conda/bin/python -m pip install manim piper-tts; else echo 'install conda (Miniforge: https://conda-forge.org/download), then run ./setup.sh videos again'; fi" }
   , { id := "java", name := "Java", purpose := "TLC, for the TLA+ comparison (make tla-check)", targets := ["tla"],
       test := "command -v java", apt := ["default-jre-headless"], brew := ["openjdk"], provides := ["java"] }
   , { id := "tlc", name := "TLA+ tools (checksum-pinned, in .toolchains/)", purpose := "the TLA+ comparison",
@@ -97,17 +102,20 @@ def shQuote (s : String) : String := "'" ++ s.replace "'" "'\\''" ++ "'"
 def script : String := Id.run do
   let mut out := "#!/usr/bin/env bash
 # LeanFM's setup (clause selfhost.setup), generated from LeanFM/Deps.lean by SetupScript.lean: do not edit.
-# Usage: ./setup.sh [build|book|check|videos|tla|all] [--check]
+# Usage: ./setup.sh [build|book|check|videos|tla|all] [--check] [--quiet] [--list]
 #   installs what the target needs and is missing (build unless named; book and check include build);
-#   --check only reports what is missing, and exits 1 when something is.
+#   --check only reports what is missing, and exits 1 when something is; --quiet says nothing when
+#   nothing is; --list prints what the target needs, each with its test and how to install it.
 set -o pipefail
 cd \"$(dirname \"$0\")\"
-target=build; mode=install
+target=build; mode=install; quiet=
 for a in \"$@\"; do
   case \"$a\" in
     --check) mode=check ;;
+    --quiet) quiet=1 ;;
+    --list) mode=list ;;
     build|book|check|videos|tla|all) target=$a ;;
-    *) echo \"usage: ./setup.sh [build|book|check|videos|tla|all] [--check]\"; exit 2 ;;
+    *) echo \"usage: ./setup.sh [build|book|check|videos|tla|all] [--check] [--quiet] [--list]\"; exit 2 ;;
   esac
 done
 case \"$target\" in
@@ -121,6 +129,14 @@ present() { ( eval \"$1\" ) >/dev/null 2>&1; }
 missing=(); apt=(); brew=(); cask=(); runs=()
 "
   for d in deps do
+    out := out ++ s!"if [ \"$mode\" = list ] && needed {shQuote (" ".intercalate d.targets)}; then\n  printf '%s\\n' {shQuote s!"- {d.name}: {d.purpose}"} {shQuote s!"  test: {d.test}"}"
+    if !d.apt.isEmpty then out := out ++ s!" {shQuote s!"  apt: sudo apt-get install -y {" ".intercalate d.apt}"}"
+    if !(d.brew ++ d.brewCask).isEmpty then
+      out := out ++ s!" {shQuote s!"  brew: brew install {" ".intercalate (d.brew ++ d.brewCask.map ("--cask " ++ ·))}"}"
+    if !d.run.isEmpty then out := out ++ s!" {shQuote s!"  run: {d.run.replace "\n" "; "}"}"
+    out := out ++ "\nfi\n"
+  out := out ++ "if [ \"$mode\" = list ]; then exit 0; fi\n"
+  for d in deps do
     out := out ++ s!"if needed {shQuote (" ".intercalate d.targets)} && ! present {shQuote d.test}; then\n"
     out := out ++ s!"  missing+=({shQuote d.name}); apt+=({" ".intercalate d.apt}); brew+=({" ".intercalate d.brew}); cask+=({" ".intercalate d.brewCask})\n"
     if !d.run.isEmpty then out := out ++ s!"  runs+=({d.id})\n"
@@ -128,9 +144,11 @@ missing=(); apt=(); brew=(); cask=(); runs=()
   for d in deps do
     if !d.run.isEmpty then
       out := out ++ s!"run_{d.id}() \{\n{"\n".intercalate ((d.run.splitOn "\n").map ("  " ++ ·))}\n}\n"
-  out := out ++ "if [ ${#missing[@]} -eq 0 ]; then echo \"ok: everything $target needs is present\"; exit 0; fi
+  out := out ++ "if [ ${#missing[@]} -eq 0 ]; then [ -n \"$quiet\" ] || echo \"ok: everything $target needs is present\"; exit 0; fi
 echo \"missing for $target:\"; printf '  %s\\n' \"${missing[@]}\"
-if [ \"$mode\" = check ]; then echo \"run ./setup.sh $target to install them\"; exit 1; fi
+if [ \"$mode\" = check ]; then
+  echo \"install them with ./setup.sh $target, or have an assistant do it: make setup-help TARGET=$target\"; exit 1
+fi
 if [ \"$os\" = apt ] && [ ${#apt[@]} -gt 0 ]; then sudo apt-get update && sudo apt-get install -y \"${apt[@]}\"; fi
 if [ \"$os\" = mac ]; then
   command -v brew >/dev/null 2>&1 || { echo \"install Homebrew first: https://brew.sh\"; exit 1; }

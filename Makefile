@@ -15,6 +15,7 @@ ifneq ($(LOCK_GOALS),)
 .PHONY: leanfm-make-lock leanfm-default $(MAKECMDGOALS)
 $(if $(MAKECMDGOALS),$(MAKECMDGOALS),leanfm-default): leanfm-make-lock ; @:
 leanfm-make-lock:
+	@command -v flock >/dev/null || { echo "make: flock is missing (one make at a time in a checkout); run ./setup.sh"; exit 1; }
 	@mkdir -p $(dir $(LEANFM_MAKE_LOCK))
 	@flock -n $(LEANFM_MAKE_LOCK) true || echo "make: another make is running in this checkout; waiting for it ($(LEANFM_MAKE_LOCK))"
 	@LEANFM_MAKE_LOCKED=1 flock $(LEANFM_MAKE_LOCK) $(MAKE) --no-print-directory $(MAKECMDGOALS)
@@ -44,7 +45,17 @@ EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 # `make` rebuilds everything: the browser bundle, every Lean target, and the book.
 all: build lean book
 
-build: ui-build
+# A target's outside programs are checked before its first step (selfhost.setup): it stops naming
+# what is missing, instead of failing deep inside a build.
+needs-%:
+	@./setup.sh $* --check --quiet
+
+# What is missing, as a prompt for whatever assistant you use; AGENT=claude (or codex, ...) runs one.
+.PHONY: setup-help
+setup-help:
+	@bash scripts/setup_help.sh "$(or $(TARGET),build)" "$(AGENT)"
+
+build: needs-build ui-build
 	@python3 scripts/invalidate_include_str.py
 	lake build leanfm-server leanfm-mcp
 
@@ -77,7 +88,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check deps-check book-structure-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check run-log-check
+check: needs-check make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check deps-check book-structure-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check run-log-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -104,24 +115,24 @@ video-check:
 	lake env lean video/lean-tutorial/protocols/Constructs.leanfm
 	lake env lean video/lean-tutorial/protocols/Lookup.leanfm
 
-video: video-check
+video: needs-videos video-check
 	$(VIDEO_PYTHON) -m manim -qm --media_dir video/media --output_file leanfm-overview.mp4 video/manim_overview.py LeanFMOverview
 	cp video/media/videos/manim_overview/720p30/leanfm-overview.mp4 video/leanfm-overview.mp4
 
-video-narrated: video-check
+video-narrated: needs-videos video-check
 	$(VIDEO_PYTHON) scripts/prepare_video_narration.py
 	$(MAKE) video
 	$(VIDEO_PYTHON) scripts/render_video_narration.py
 
 # The TicTacToe walkthrough (video/tictactoe): LeanFM's real answers and viewer, captured, then narrated.
 .PHONY: video-tictactoe
-video-tictactoe:
+video-tictactoe: needs-videos
 	python3 video/tictactoe/capture.py
 	python3 video/tictactoe/produce.py
 
 # The book tour (video/book-tour): real terminal steps, real LeanFM answers, local narration.
 .PHONY: video-tour
-video-tour:
+video-tour: needs-videos
 	cp -n examples/guinea-pigs/cage.log logs/devices.log || true
 	python3 video/book-tour/capture.py
 	python3 video/book-tour/fetch.py
@@ -228,7 +239,7 @@ scripts:
 	node scripts/format_assets.js
 	node scripts/embed_static_assets.js
 
-book: lean
+book: needs-book lean
 	lake env lean --run RuntimeReliabilityDiagram.lean
 	lake env lean --run NestedForkJoinExample.lean
 	lake env lean --run StochasticUserMDPExample.lean
@@ -267,7 +278,7 @@ tla-toolchain:
 	curl -fsSL https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar -o .toolchains/tla/tla2tools-1.7.4.jar
 	echo '936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88  .toolchains/tla/tla2tools-1.7.4.jar' | sha256sum -c -
 
-tla-check:
+tla-check: needs-tla
 	python3 scripts/check_tla_example.py
 
 book-clean:
@@ -312,6 +323,7 @@ keepalive-check: build
 # setup.sh and README.md's install table, generated from LeanFM/Deps.lean (selfhost.setup).
 .PHONY: setup-script deps-check
 setup-script:
+	lake build LeanFM.Deps
 	lake env lean --run SetupScript.lean
 
 deps-check:

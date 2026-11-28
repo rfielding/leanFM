@@ -20,7 +20,9 @@ running: it is the LeanFM server, answering on \texttt{http://127.0.0.1:8080}. L
 
 To build this book as well, run \texttt{./setup.sh book} first; \texttt{./setup.sh all} sets up
 everything. With no \texttt{git} yet, install it first: \texttt{sudo apt install git} on Ubuntu,
-\texttt{xcode-select --install} on macOS.
+\texttt{xcode-select --install} on macOS. Every \texttt{make} target checks what it needs before
+anything else, and stops at once naming what is missing. If \texttt{./setup.sh} cannot install it on
+your machine, \texttt{make setup-help} writes a prompt for whatever assistant you use.
 
 \section{Connect Claude}
 

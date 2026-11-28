@@ -64,6 +64,7 @@ def main():
     if "--self-test" in sys.argv:
         self_test(); return 0
     problems = []
+    subprocess.run(["lake", "build", "LeanFM.Deps"], cwd=ROOT, capture_output=True, text=True)
     r = subprocess.run(["lake", "env", "lean", "--run", "SetupScript.lean", "--check"], cwd=ROOT, capture_output=True, text=True)
     if r.returncode != 0:
         problems.append((r.stderr or r.stdout).strip())

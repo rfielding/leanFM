@@ -107,7 +107,10 @@ make serve
 ```
 
 `./setup.sh book` adds what `make book` needs, `./setup.sh check` what `make check` needs, and
-`./setup.sh tla` what `make tla-check` needs, `./setup.sh all` everything; `--check` only reports what is missing. The script is generated from
+`./setup.sh tla` what `make tla-check` needs, `./setup.sh all` everything; `--check` only reports what is missing. Every make target checks
+its programs first and stops naming what is missing. When `./setup.sh` cannot install something on
+your machine, `make setup-help` writes a prompt for whatever assistant you use (`AGENT=claude` or
+`AGENT=codex` runs one with it). The script is generated from
 one list, `LeanFM/Deps.lean`, and the MCP tool `setup_script` answers the same script:
 
 <!-- deps: generated from LeanFM/Deps.lean by SetupScript.lean -->
@@ -131,6 +134,7 @@ one list, `LeanFM/Deps.lean`, and the MCP tool `setup_script` answers the same s
 | Google Chrome | the headless viewer in make run-log-check and the videos | check, videos |
 | Go (checksum-pinned, in .toolchains/) | the Go example's checks | check |
 | FFmpeg | the videos | videos |
+| the video environment (video/.conda: Python with Manim and Piper) | rendering and narrating the videos | videos |
 | Java | TLC, for the TLA+ comparison (make tla-check) | tla |
 | TLA+ tools (checksum-pinned, in .toolchains/) | the TLA+ comparison | tla |
 <!-- deps: end -->
