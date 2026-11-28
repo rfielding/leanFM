@@ -237,10 +237,15 @@ list is sorry. LeanFM's first such theorem is the laws of run judging's four val
 twice is the identity, \texttt{and} and \texttt{or} commute, De Morgan holds both ways, and one run
 never refutes a \textsf{possibly} or proves an \textsf{always}. Its only axiom is \texttt{propext}. Two more follow it. The path checks refuse an absolute path, a \texttt{..} part and a backslash,
 for every input, not only for the inputs a test tries. And the implication rule from the Preface
-holds in every model. LeanFM's CTL checker is written with recursion Lean cannot reason about, so
-the theorem is stated over a total semantics of the same formulas: when the trigger can never happen,
-\texttt{(stronglyImplies a b)} is false at every state and \texttt{(always (implies a b))} is true at
-every state. The checker is tested against that semantics; proving the two equal is the next step.
+holds in every model: when the trigger can never happen, \texttt{(stronglyImplies a b)} is false at
+every state and \texttt{(always (implies a b))} is true at every state.
+
+The rule is proved of the checker LeanFM runs, too. The checker finds the reachable states, then
+labels each subformula once with the states where it holds. For every finite model, Lean proves that
+each fixpoint iteration ends at a fixpoint, and that \textsf{someNext}, \textsf{allNext},
+\textsf{possibly}, \textsf{someUntil} and \textsf{always} are exact over the model's paths. The
+other words are computed the same way. On every model of up to three states, they agree with the
+earlier depth-first checker for 879,200 formula and state pairs.
 
 Three more are about the servers. A call never raises a limit past the operator's ceiling,
 whatever it asks for. A switch read at startup is true only for \texttt{1} or \texttt{true},

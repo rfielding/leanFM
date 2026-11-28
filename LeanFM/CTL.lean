@@ -57,113 +57,63 @@ def someUntil {S : Type} (p q : CTL S) : CTL S := CTL.eu p q
 def allUnless {S : Type} (p q : CTL S) : CTL S := CTL.aw p q
 def someUnless {S : Type} (p q : CTL S) : CTL S := CTL.ew p q
 
-partial def anyReachable [DecidableEq S]
-    (succ : S -> List S) (p : S -> Bool) (seen : List S) (s : S) : Bool :=
-  if p s then
-    true
-  else if seen.contains s then
-    false
-  else
-    (succ s).any (anyReachable succ p (s :: seen))
+variable {S : Type}
 
-partial def allReachable [DecidableEq S]
-    (succ : S -> List S) (p : S -> Bool) (seen : List S) (s : S) : Bool :=
-  if seen.contains s then
-    true
-  else
-    p s && (succ s).all (allReachable succ p (s :: seen))
+/-! The checker (clause selfhost.mcp.logic.checker): explore the reachable states, then label each
+subformula with the list of states where it holds, once. -/
 
-partial def allPathsEventually [DecidableEq S]
-    (succ : S -> List S) (p : S -> Bool) (seen : List S) (s : S) : Bool :=
-  if p s then
-    true
-  else if seen.contains s then
-    false
-  else
-    match succ s with
-    | [] => false
-    | next => next.all (allPathsEventually succ p (s :: seen))
+/-- Membership in a label. -/
+def mem [DecidableEq S] (z : List S) (s : S) : Bool := z.contains s
 
-partial def existsPathAlways [DecidableEq S]
-    (succ : S -> List S) (p : S -> Bool) (seen : List S) (s : S) : Bool :=
-  if !p s then
-    false
-  else if seen.contains s then
-    true
-  else
-    match succ s with
-    | [] => true
-    | next => next.any (existsPathAlways succ p (s :: seen))
+/-- A step over `states`, applied from `z` until it changes nothing, at most `fuel` times. -/
+def iter [DecidableEq S] (states : List S) (f : (S → Bool) → S → Bool) : Nat → List S → List S
+  | 0, z => z
+  | k + 1, z => let z' := states.filter (f (mem z)); if z' = z then z else iter states f k z'
 
-partial def existsUntil [DecidableEq S]
-    (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
-  if q s then
-    true
-  else if seen.contains s then
-    false
-  else if !p s then
-    false
-  else
-    (succ s).any (existsUntil succ p q (s :: seen))
+/-- The least fixpoint: from no states. -/
+def lfp [DecidableEq S] (states : List S) (f : (S → Bool) → S → Bool) : List S :=
+  iter states f (states.length + 1) []
 
-partial def allUntilFrom [DecidableEq S]
-    (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
-  if q s then
-    true
-  else if seen.contains s then
-    false
-  else if !p s then
-    false
-  else
-    match succ s with
-    | [] => false
-    | next => next.all (allUntilFrom succ p q (s :: seen))
+/-- The greatest fixpoint: from every state. -/
+def gfp [DecidableEq S] (states : List S) (f : (S → Bool) → S → Bool) : List S :=
+  iter states f (states.length + 1) states
 
-partial def existsWeakUntil [DecidableEq S]
-    (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
-  if q s then
-    true
-  else if !p s then
-    false
-  else if seen.contains s then
-    true
-  else
-    match succ s with
-    | [] => true
-    | next => next.any (existsWeakUntil succ p q (s :: seen))
+/-- The labels of one formula over `states`. -/
+def label [DecidableEq S] (states : List S) (succ : S → List S) : CTL S → List S
+  | .atom p => states.filter p
+  | .neg p => let a := label states succ p; states.filter fun s => !mem a s
+  | .and p q => let a := label states succ p; let b := label states succ q; states.filter fun s => mem a s && mem b s
+  | .or p q => let a := label states succ p; let b := label states succ q; states.filter fun s => mem a s || mem b s
+  | .ex p => let a := label states succ p; states.filter fun s => (succ s).any (mem a)
+  | .ax p => let a := label states succ p; states.filter fun s => (succ s).all (mem a)
+  | .ef p => let a := label states succ p
+      lfp states (fun z s => mem a s || (succ s).any z)
+  | .ag p => let a := label states succ p
+      let e := lfp states (fun z s => !mem a s || (succ s).any z)
+      states.filter fun s => !mem e s
+  | .af p => let a := label states succ p
+      lfp states (fun z s => mem a s || (!(succ s).isEmpty && (succ s).all z))
+  | .eg p => let a := label states succ p
+      gfp states (fun z s => mem a s && ((succ s).isEmpty || (succ s).any z))
+  | .eu p q => let a := label states succ p; let b := label states succ q
+      lfp states (fun z s => mem b s || (mem a s && (succ s).any z))
+  | .au p q => let a := label states succ p; let b := label states succ q
+      lfp states (fun z s => mem b s || (mem a s && !(succ s).isEmpty && (succ s).all z))
+  | .ew p q => let a := label states succ p; let b := label states succ q
+      gfp states (fun z s => mem b s || (mem a s && ((succ s).isEmpty || (succ s).any z)))
+  | .aw p q => let a := label states succ p; let b := label states succ q
+      gfp states (fun z s => mem b s || (mem a s && (succ s).all z))
 
-partial def allWeakUntil [DecidableEq S]
-    (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
-  if q s then
-    true
-  else if !p s then
-    false
-  else if seen.contains s then
-    true
-  else
-    match succ s with
-    | [] => true
-    | next => next.all (allWeakUntil succ p q (s :: seen))
+/-- The states reachable from `seen`, breadth first; `frontier` are the ones not yet expanded. -/
+partial def explore [DecidableEq S] (succ : S → List S) (seen frontier : List S) : List S :=
+  match frontier with
+  | [] => seen
+  | _ =>
+    let next := ((frontier.flatMap succ).eraseDups).filter fun t => !seen.contains t
+    explore succ (seen ++ next) next
 
-partial def holds [DecidableEq S] (succ : S -> List S) (s : S) : CTL S -> Bool
-  | atom p => p s
-  | neg p => !(holds succ s p)
-  | and p q => holds succ s p && holds succ s q
-  | or p q => holds succ s p || holds succ s q
-  | ex p => (succ s).any (fun s' => holds succ s' p)
-  | ax p => (succ s).all (fun s' => holds succ s' p)
-  | ef p => anyReachable succ (fun s' => holds succ s' p) [] s
-  /- Keep universal eventuality in its exact dual form: search for one path on
-     which the negation persists, then negate that existential witness. -/
-  | af p => !(existsPathAlways succ (fun s' => !(holds succ s' p)) [] s)
-  | eg p => existsPathAlways succ (fun s' => holds succ s' p) [] s
-  /- Keep universal invariance in its exact dual form: search for one reachable
-     counterexample instead of implementing a separate universal traversal. -/
-  | ag p => !(anyReachable succ (fun s' => !(holds succ s' p)) [] s)
-  | eu p q => existsUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
-  | au p q => allUntilFrom succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
-  | ew p q => existsWeakUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
-  | aw p q => allWeakUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
+def holds [DecidableEq S] (succ : S -> List S) (s : S) (f : CTL S) : Bool :=
+  mem (label (explore succ [s] [s]) succ f) s
 
 end CTL
 end LeanFM

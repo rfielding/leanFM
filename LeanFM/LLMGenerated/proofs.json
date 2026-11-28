@@ -16,5 +16,9 @@
  {"sorryFree": true,
   "exists": true,
   "axioms": ["propext", "Classical.choice", "Quot.sound"]},
+ "LeanFM.CheckerProofs.checker_proved":
+ {"sorryFree": true,
+  "exists": true,
+  "axioms": ["propext", "Classical.choice", "Quot.sound"]},
  "LeanFM.CTLProofs.implication_rule":
  {"sorryFree": true, "exists": true, "axioms": ["propext", "Quot.sound"]}}

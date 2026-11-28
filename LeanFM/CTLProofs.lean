@@ -6,8 +6,8 @@ import LeanFM.CTL
 semantics of LeanFM's CTL type, where every fixpoint is iterated a fuel bound of steps (the number
 of states of a finite model is enough), this proves the rule's two halves for every model and every
 bound: when the trigger can never happen, a strong implication is false at every state, and the
-plain always-implies is true at every state. LeanFM.CTL.holds, the checker LeanFM runs, is partial;
-it is tested against these definitions, not proved equal to them. -/
+plain always-implies is true at every state. CheckerProofs.lean proves the same rule of the checker
+LeanFM runs, LeanFM.CTL.label (clause selfhost.mcp.logic.checker). -/
 
 namespace LeanFM.CTLProofs
 open LeanFM

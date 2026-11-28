@@ -126,4 +126,5 @@ requirements {
   selfhost.requirements.standing "A run is judged with four values: not twice is the identity, and and or commute, De Morgan holds, one run never refutes a possibly nor proves an always" => sorry "a property of RunCheck, the run judge, not of a protocol";
   SettingsChecked "A switch read at startup is the default only when absent or empty, true only for 1 or true, false only for 0 or false, every other value refused; a limit ceiling or tick budget read is at least 1" => sorry "a property of the startup parsers, proved for every input";
   SecretsUnwritten "A secret variable's setting in a server's MainEntered event is the same whatever its value" => sorry "a property of Env.entry, proved for every value";
+  CheckerProved "LeanFM's CTL checker reaches every fixpoint it computes, and its EX, AX, EF, EU and AG are exact over every finite model; the implication rule holds of the checker itself" => sorry "a property of LeanFM.CTL.label, proved for every finite model";
 }
