@@ -123,6 +123,8 @@ requirement, or a pointer for the implementation's own CTL. -/
 inductive Evidence where
   | conform (log : String)
   | test (name : String)
+  /-- a Lean theorem, checked by the kernel when the project builds (selfhost.requirements.proofs) -/
+  | proof (name : String)
   | pointer (p : Pointer)
   deriving Inhabited, Repr, BEq
 
@@ -398,6 +400,8 @@ structure Acc where
   systems : Array SystemDef := #[]
   /-- the file's `requirements { ... }` map, its last item (selfhost.requirements.map) -/
   reqMap : Option (Array (String × Pointer)) := none
+  /-- each short name of the map with its requirement's sentence -/
+  reqShort : Array (String × String) := #[]
   /-- `implementation` blocks (selfhost.implementations.map) -/
   impls : Array ImplDef := #[]
   /-- `deployment` blocks after the protocols they place (selfhost.session.deployment) -/
@@ -1048,20 +1052,26 @@ def pointerOf (stx : Lean.Syntax) : R Pointer := do
   let note := if stx[1].getNumArgs ≥ 1 then (stx[1][0].isStrLit?).getD "" else ""
   return .sorry_ note
 
-/-- A `requirements { ... }` block: every name once, every protocol it points at defined in the file. -/
-def requirementsDecl (defs : List Def) (body : Lean.Syntax) : R (Array (String × Pointer)) := do
+/-- A `requirements { ... }` block: every name and short name once, every protocol it points at
+defined in the file. Answers the entries and each short name with its requirement's sentence. -/
+def requirementsDecl (defs : List Def) (body : Lean.Syntax) : R (Array (String × Pointer) × Array (String × String)) := do
   let mut out : Array (String × Pointer) := #[]
+  let mut shorts : Array (String × String) := #[]
   for e in body[2].getArgs do
     if out.size ≥ maxMapEntries then failAt e s!"a requirements map has at most {maxMapEntries} entries"
-    let n ← reqName e[0]
-    if out.any (·.1 == n) then failAt e[0] s!"requirement \"{n}\" is in the map twice"
-    let p ← pointerOf e[2]
+    let n ← reqName e[1]
+    if out.any (·.1 == n) then failAt e[1] s!"requirement \"{n}\" is in the map twice"
+    if let some s := e[0].getOptional? then
+      let short := s.getId.toString
+      if shorts.any (·.1 == short) then failAt s s!"the short name {short} is in the map twice"
+      shorts := shorts.push (short, n)
+    let p ← pointerOf e[3]
     match p with
     | .protocol q | .formula q _ =>
-      unless defs.any (·.name == q) do failAt e[2] s!"requirement \"{n}\": no protocol {q} is defined in this file"
+      unless defs.any (·.name == q) do failAt e[3] s!"requirement \"{n}\": no protocol {q} is defined in this file"
     | .sorry_ _ => pure ()
     out := out.push (n, p)
-  return out
+  return (out, shorts)
 
 /-- An `implementation Name of Module { ... }` block. What it names in the imported file is checked
 where the project's files are read (ProjectView), since one file cannot see another. -/
@@ -1082,6 +1092,8 @@ def implementationDecl (body : Lean.Syntax) : R ImplDef := do
           match ev[1].isStrLit? with | some f => pure (Evidence.conform f) | none => failAt ev "conform \"log path\""
         else if w.isAtom && w.getAtomVal == "test" then
           match ev[1].isStrLit? with | some t => pure (Evidence.test t) | none => failAt ev "test \"name\""
+        else if w.isAtom && w.getAtomVal == "proof" then
+          match ev[1].isStrLit? with | some t => pure (Evidence.proof t) | none => failAt ev "proof \"Theorem.name\""
         else pure (Evidence.pointer (← pointerOf w))
       d := { d with entries := d.entries ++ [(k, v)] }
     else if a.isAtom && a.getAtomVal == "hint" then
@@ -1103,8 +1115,8 @@ def fileDefs (stx : Syntax) (allowNoProtocol : Bool := false) : R (List Def) := 
     let k := body.getKind
     if (← get).reqMap.isSome then failAt body "the requirements map is the file's last item"
     if k == `LeanFM.Session.Grammar.requirementsBody then
-      let m ← requirementsDecl defs.toList body
-      modify fun a => { a with reqMap := some m }
+      let (m, shorts) ← requirementsDecl defs.toList body
+      modify fun a => { a with reqMap := some m, reqShort := shorts }
       continue
     if k == `LeanFM.Session.Grammar.implementationBody then
       let d ← implementationDecl body

@@ -64,18 +64,19 @@ def registry : List Variable :=
   , { name := "LEANFM_MCP_LOGS", readers := [mcp], accepts := "0, 1, true or false: serve server_logs on a hosted endpoint", default := "off" }
   , { name := "LEANFM_FORWARD_WAIT_SECONDS", readers := [mcp], accepts := "seconds a relayed request waits for the server to listen, 0 to 600", default := "30" } ]
 
-/-- The settings of the variables `exe` reads, for its MainEntered event: name, whether it is set, and
-its value cut to 120 characters only when it is set and not secret. -/
+/-- One variable's setting, for its executable's MainEntered event: name, whether it is set, and its
+value cut to 120 characters only when it is set and not secret. -/
+def entry (v : Variable) (raw : Option String) : Json :=
+  Json.mkObj <| match raw with
+    | none => [("name", Json.str v.name), ("set", Json.bool false)]
+    | some x =>
+      [("name", Json.str v.name), ("set", Json.bool true)] ++
+        (if v.secret then [("secret", Json.bool true)] else [("value", Json.str (x.take 120).toString)])
+
 def settings (exe : String) : IO Json := do
   let mut out := #[]
   for v in registry.filter (·.readers.contains exe) do
-    let raw ← IO.getEnv v.name
-    let entry := match raw with
-      | none => [("name", Json.str v.name), ("set", Json.bool false)]
-      | some x =>
-        [("name", Json.str v.name), ("set", Json.bool true)] ++
-          (if v.secret then [("secret", Json.bool true)] else [("value", Json.str (x.take 120).toString)])
-    out := out.push (Json.mkObj entry)
+    out := out.push (entry v (← IO.getEnv v.name))
   return Json.arr out
 
 end LeanFM.Env

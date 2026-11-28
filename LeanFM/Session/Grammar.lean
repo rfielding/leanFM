@@ -303,14 +303,15 @@ def sexpr : Parser := { fn := sexprFn }
 /-- What a requirement points at: `sorry` (with an optional note), a protocol, or `P ⊨ φ`. -/
 def reqPointer : Parser := node `LeanFM.Session.Grammar.reqPointer
   ((W "sorry" >> optional strLit) <|> (ident >> optional (" ⊨ " >> sexpr)))
-/-- `"name" => pointer;` -/
-def reqEntry : Parser := node `LeanFM.Session.Grammar.reqEntry (strLit >> " => " >> reqPointer >> ";")
+/-- `Short "sentence" => pointer;`: an optional short name (an identifier; a SelfHosting clause id
+says which clause the entry formalizes), the requirement in English, and what it reduces to. -/
+def reqEntry : Parser := node `LeanFM.Session.Grammar.reqEntry (optional ident >> strLit >> " => " >> reqPointer >> ";")
 def requirementsBody : Parser := node `LeanFM.Session.Grammar.requirementsBody
   (nonReservedSymbol "requirements" true >> "{" >> many reqEntry >> "}")
 
 /-- Evidence for an imported requirement, or a pointer for the implementation's own CTL. -/
 def evidence : Parser := node `LeanFM.Session.Grammar.evidence
-  ((W "conform" >> strLit) <|> (W "test" >> strLit) <|> reqPointer)
+  ((W "conform" >> strLit) <|> (W "test" >> strLit) <|> (W "proof" >> strLit) <|> reqPointer)
 /-- One line of an implementation: `refines P by Q;`, `hint "text";` or `"name" => evidence;`. -/
 def implItem : Parser := node `LeanFM.Session.Grammar.implItem
   ((W "refines" >> ident >> W "by" >> ident >> ";") <|> (W "hint" >> strLit >> ";") <|> (strLit >> " => " >> evidence >> ";"))

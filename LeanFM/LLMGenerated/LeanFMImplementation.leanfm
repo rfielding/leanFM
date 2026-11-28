@@ -5,14 +5,21 @@ for each requirement of LeanFM.leanfm, CTL about what no agent observes (the ser
 project root), and hints for whoever writes the code. -/
 implementation Lean of LeanFM.LLMGenerated.LeanFM {
   "Every MCP request a server takes is answered" => conform "LeanFM/LLMGenerated/runs/mcp-call.jsonl";
-  "The MCP conversation follows LeanFMMcp" => test "LeanFM/MCPTests.lean: MCP lists canonical requirements";
-  "No project view or tool before the server is initialized" => test "LeanFM/MCPTests.lean: initialize";
-  "Every page the view asks for is shown or refused" => test "LeanFM/MCPTests.lean: project_view pages";
-  "Every protocol the view loads is drawn or refused" => test "LeanFM/MCPTests.lean: session tools by project and file";
-  "A file the project does not list is refused" => test "LeanFM/MCPTests.lean: a file outside the listing is refused";
-  "The session ends only with Bye" => sorry "no test drives Bye yet";
-  "The session can always end" => sorry;
-  "Every read of the project root is answered" => LeanFMMcp ⊨ (always (implies (on ReadPage) (allNext (on Items))));
+  "A server listens only after reaching main" => conform "LeanFM/LLMGenerated/runs/server-start.jsonl";
+  "The MCP conversation follows LeanFMMcp" => conform "LeanFM/LLMGenerated/runs/leanfm-mcp.jsonl";
+  "No project view or tool before the server is initialized" => conform "LeanFM/LLMGenerated/runs/leanfm-mcp.jsonl";
+  "Every page the view asks for is shown or refused" => conform "LeanFM/LLMGenerated/runs/leanfm-mcp.jsonl";
+  "Every protocol the view loads is drawn or refused" => conform "LeanFM/LLMGenerated/runs/leanfm-mcp.jsonl";
+  "A file the project does not list is refused" => conform "LeanFM/LLMGenerated/runs/leanfm-mcp.jsonl";
+  "The session ends only with Bye" => conform "LeanFM/LLMGenerated/runs/leanfm-mcp.jsonl";
+  "The session can always end" => conform "LeanFM/LLMGenerated/runs/leanfm-mcp.jsonl";
+  "Every read of the project root is answered" => LeanFMMcp ⊨ (stronglyImplies (on ReadPage) (allNext (on Items)));
+  "selfhost.requirements.standing" => proof "LeanFM.RunCheck.Proofs.standing_laws";
+  "PathsInside" => proof "LeanFM.PathProofs.paths_stay_inside";
+  "selfhost.mcp.logic.implication" => proof "LeanFM.CTLProofs.implication_rule";
+  "selfhost.mcp.limits" => proof "LeanFM.LimitProofs.validate_within_ceiling";
+  "SettingsChecked" => proof "LeanFM.StartupProofs.startup_checked";
+  "SecretsUnwritten" => proof "LeanFM.StartupProofs.secret_never_written";
   hint "Implement in Lean 4; the server is one executable built with lake";
   hint "The MCP surface is read-only: no tool writes, renames or deletes a file";
   hint "Read the project root only through ProjectView.inside, so a symlink cannot escape it";

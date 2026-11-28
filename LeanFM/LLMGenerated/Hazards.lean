@@ -55,7 +55,7 @@ def hazards : List Hazard :=
       hazard := "a file argument, a log name or a symlink reaches outside a project root"
       never := "the server reads a file outside the project root it was asked about"
       control := "ProjectView.inside, ServerLogs.pathOf and ProjectRoots resolve real paths and check they are below the root"
-      test := "LeanFM/MCPTests.lean: a conform log /etc/passwd outside the root is failing; scripts/external_project_check.py: a symlink out of the root is not read" }
+      test := "LeanFM/MCPTests.lean: a conform log /etc/passwd outside the root is failing; scripts/external_project_check.py: a symlink out of the root is not read; proved for every path: LeanFM.PathProofs.paths_stay_inside" }
   , { id := "connections.exhaustion", status := "mitigated"
       hazard := "clients hold open connections until the server runs out of file handles"
       never := "more than LEANFM_MAX_CONNECTIONS connections are open at once"
@@ -66,12 +66,19 @@ def hazards : List Hazard :=
       never := "a body over requestBytes is read"
       control := "the body is sized before it is read; LeanFM-Limits raises it per request up to the operator's ceiling"
       test := "scripts/header_limits_check.py: a body over 256 KiB is refused with 413" }
-  , { id := "disk.exhaustion", status := "open"
-      hazard := "event logs (logs/*.log, a project's logs/events.log) grow without bound until the disk is full"
-      never := "a LeanFM process fills the disk" }
-  , { id := "files.handles", status := "open"
-      hazard := "many concurrent reads of logs and protocol files exhaust file handles outside the connection cap"
-      never := "a request fails because the process ran out of file handles" } ]
+  , { id := "disk.exhaustion", status := "mitigated"
+      hazard := "a LeanFM server writes to disk as it serves, until the disk is full"
+      never := "a LeanFM process fills the disk while serving"
+      control := "the MCP surface is read-only (selfhost.mcp.readonly) and the servers write their event lines to standard output, never to a file; the chat UI, off by default, is the only writer, of its own store"
+      test := "scripts/mcp_run_log.py: a server serving a whole viewer conversation and 40 more requests leaves git status of the checkout unchanged" }
+  , { id := "logs.retention", status := "open"
+      hazard := "log files kept outside LeanFM (make serve's output where an operator tees it, a project's logs/events.log) grow without bound; LeanFM reads them in bounded windows but does not rotate them"
+      never := "a log LeanFM's tools read fills the disk" }
+  , { id := "files.handles", status := "mitigated"
+      hazard := "many concurrent reads of logs and protocol files exhaust file handles"
+      never := "a request fails because the process ran out of file handles"
+      control := "LEANFM_MAX_CONNECTIONS caps the requests served at once, and each request reads its files one at a time, closing each before the next"
+      test := "scripts/mcp_run_log.py: 40 requests that read the disk leave the server holding at most 4 more files than before them" } ]
 
 def statuses : List String := ["mitigated", "open"]
 

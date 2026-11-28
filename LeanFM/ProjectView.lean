@@ -552,6 +552,8 @@ structure MapFile where
   text : String
   defs : List String
   reqMap : List (String × LeanFM.Session.Text.Pointer)
+  /-- each short name with its requirement's sentence -/
+  reqShort : List (String × String) := []
   impls : List LeanFM.Session.Text.ImplDef
 
 /-- A protocol file an entry names, read whole: only a relative .leanfm or .protocol path the
@@ -585,7 +587,7 @@ def readMapFiles (p : Project) (protocols : Array String) : IO (Array MapFile ×
         ("viewer", "text"), ("text", Json.str e)])
     | .ok (defs, acc) =>
       if acc.reqMap.isNone && acc.impls.isEmpty then continue
-      files := files.push { path := f, text, defs := defs.map (·.name), reqMap := (acc.reqMap.getD #[]).toList, impls := acc.impls.toList }
+      files := files.push { path := f, text, defs := defs.map (·.name), reqMap := (acc.reqMap.getD #[]).toList, reqShort := acc.reqShort.toList, impls := acc.impls.toList }
   return (files, errs)
 
 open LeanFM.Session.Text in
@@ -596,9 +598,21 @@ def pointerFields : Pointer → List (String × Json)
 
 /-- The requirement list, unchecked: every map entry with its file, then (LeanFM) every clause as sorry. -/
 def requirementRows (p : Project) (files : Array MapFile) (errs : Array Json) (withClauses : Bool := true) : Array Json :=
+  let shortOf (mf : MapFile) (n : String) : Option String := (mf.reqShort.find? (·.2 == n)).map (·.1)
+  -- a clause id as an identifier: its hyphens written as underscores
+  let asIdent (id : String) : String := id.replace "-" "_"
+  let clauseOf (s : String) : Option String := (LeanFM.LLMGenerated.SelfHosting.clauses.find? (asIdent ·.id == s)).map (·.id)
   let fromMaps := files.toList.flatMap fun mf => mf.reqMap.map fun (n, ptr) =>
-    Json.mkObj (([("list", Json.str "requirements"), ("id", Json.str n), ("file", Json.str mf.path)] : List (String × Json)) ++ pointerFields ptr)
-  let clauses := if p.isLeanFM && withClauses then LeanFM.LLMGenerated.SelfHosting.clauses.map fun c =>
+    let short := shortOf mf n
+    -- a short name that is a clause id says which clause the entry formalizes (selfhost.requirements.map)
+    let formal : List (String × Json) := match short with
+      | some s => [("short", Json.str s)] ++ (match clauseOf s with
+          | some c => if p.isLeanFM then [("formalizes", Json.str c)] else []
+          | none => [])
+      | none => []
+    Json.mkObj (([("list", Json.str "requirements"), ("id", Json.str n), ("file", Json.str mf.path)] : List (String × Json)) ++ formal ++ pointerFields ptr)
+  let formalized := files.toList.flatMap fun mf => mf.reqShort.map (·.1)
+  let clauses := if p.isLeanFM && withClauses then (LeanFM.LLMGenerated.SelfHosting.clauses.filter (fun c => !formalized.contains (asIdent c.id))).map fun c =>
       Json.mkObj [("list", "requirements"), ("id", Json.str c.id), ("kind", "sorry"), ("clause", true), ("area", Json.str c.area),
         ("declared", Json.str c.status), ("text", Json.str c.requirement), ("viewer", "text")]
     else []
@@ -618,6 +632,7 @@ def implementationRows (files : Array MapFile) : Array Json := Id.run do
         let fields : List (String × Json) := match ev with
           | .conform log => [("kind", "conform"), ("log", Json.str log), ("viewer", "text")]
           | .test t => [("kind", "test"), ("test", Json.str t), ("viewer", "text")]
+          | .proof t => [("kind", "proof"), ("theorem", Json.str t), ("viewer", "text")]
           | .pointer ptr => pointerFields ptr
         out := out.push (Json.mkObj (base ++ [("id", Json.str k)] ++ fields))
       for (h, i) in d.hints.zipIdx do
@@ -655,6 +670,16 @@ def readLog (p : Project) (f : String) : IO (Except String Json) := do
     | .ok evs => return .ok (Json.arr evs.toArray)
     | .error e => return .error s!"conform {f}: neither a JSON array nor one event per line: {cut e 200}"
 
+/-- proofs.json beside an implementation file (selfhost.requirements.proofs): what ProofCheck.lean
+found for each theorem the file's proof entries name. Read only; none when it is not there. -/
+def readProofs (p : Project) (implFile : String) : IO (Option Json) := do
+  let dir := "/".intercalate ((implFile.splitOn "/").dropLast)
+  let f := if dir.isEmpty then "proofs.json" else dir ++ "/proofs.json"
+  let some path ← inside p f | return none
+  let (bytes, over) ← headBytes path maxLogBytes
+  if over then return none
+  return (Json.parse (decodeLossy bytes)).toOption
+
 open LeanFM.Session.Text LeanFM.RequirementCtl in
 /-- Check one row: a requirement converted to CTL and decided, or an implementation entry against
 the requirements its block imports. Evidence rows also carry the computed status. -/
@@ -680,7 +705,8 @@ def checkRow (p : Project) (protocols : Array String) (files : Array MapFile) (r
   | .ok imp =>
     let textFor (n : String) : Option String :=
       if own.defs.contains n then some own.text else if imp.defs.contains n then some imp.text else none
-    let key := g "id"
+    -- evidence is keyed by the requirement's sentence or its short name
+    let key := ((imp.reqShort.lookup (g "id")).getD (g "id"))
     let req := imp.reqMap.lookup key
     match kind with
     | "hint" => return put hintChecked
@@ -706,13 +732,14 @@ def checkRow (p : Project) (protocols : Array String) (files : Array MapFile) (r
         let rc := checkPointer imp.text rp
         let ev ← match kind with
           | "conform" => do pure (checkConform imp.text rp (← readLog p (g "log")))
+          | "proof" => do pure (proofChecked (g "theorem") (← readProofs p (g "file")))
           | "test" => pure (testChecked (g "test"))
           | "sorry" => pure (sorryChecked (g "text"))
           | _ => pure (failed s!"\"{key}\" is a requirement of {imp.path}: answer it with evidence (conform or sorry), not with CTL of its own")
         return put ev [("evidence", true), ("status", Json.str (status rc (some ev)))]
       | none =>
         match kind, ptr with
-        | "conform", _ | "test", _ => return put (failed s!"\"{key}\" is not a requirement of {imp.path}")
+        | "conform", _ | "test", _ | "proof", _ => return put (failed s!"\"{key}\" is not a requirement of {imp.path}")
         | _, some x =>
           match pointerProtocol x with
           | none => return put (sorryChecked (g "text"))
@@ -797,7 +824,8 @@ def fileRequirements (p : Project) (protocols : Array String) (f : String) : IO 
       let evidence := ichecked.filter fun r => r.getObjValD "evidence" == Json.bool true
       pure <| checked.map fun r =>
         let id := (r.getObjValAs? String "id").toOption.getD ""
-        let mine := evidence.filter fun e => (e.getObjValAs? String "id").toOption == some id
+        let short := (r.getObjValAs? String "short").toOption
+        let mine := evidence.filter fun e => let k := (e.getObjValAs? String "id").toOption; k == some id || (short.isSome && k == short)
         -- the requirement's standing over all its evidence: failing if any fails, else the strongest
         let st := (r.getObjValAs? String "standing").toOption.getD "sorry"
         let evSt := mine.toList.filterMap fun e => (e.getObjValAs? String "status").toOption

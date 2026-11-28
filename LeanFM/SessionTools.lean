@@ -2538,7 +2538,8 @@ def requirementNodes (start : Nat) (reqs : Array Json) (main : String) (defs : L
     let proto := g r "protocol"
     -- a row over a protocol carries it, so picking the row draws its interaction diagram
     -- `protocol` is a keyword where the session syntax is open, so the node is built in order
-    let shown := if isP r then s!"{g r "standing"} · protocol: {g r "id"}" else s!"{g r "standing"} · {g r "id"}"
+    let named := if g r "short" == "" then g r "id" else s!"{g r "short"}: {g r "id"}"
+    let shown := if isP r then s!"{g r "standing"} · protocol: {named}" else s!"{g r "standing"} · {named}"
     out := out.push ⟨me, some parent, "requirement", shown, s!"{g r "kind"}: {g r "reading"}", proto, none, none, ""⟩
     next := next + 1
     if let some d := defs.find? (·.name == proto) then

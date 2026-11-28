@@ -1,0 +1,20 @@
+{"LeanFM.StartupProofs.startup_checked":
+ {"sorryFree": true,
+  "exists": true,
+  "axioms": ["propext", "Classical.choice", "Quot.sound"]},
+ "LeanFM.StartupProofs.secret_never_written":
+ {"sorryFree": true,
+  "exists": true,
+  "axioms": ["propext", "Classical.choice", "Quot.sound"]},
+ "LeanFM.RunCheck.Proofs.standing_laws":
+ {"sorryFree": true, "exists": true, "axioms": ["propext"]},
+ "LeanFM.PathProofs.paths_stay_inside":
+ {"sorryFree": true,
+  "exists": true,
+  "axioms": ["propext", "Classical.choice", "Quot.sound"]},
+ "LeanFM.LimitProofs.validate_within_ceiling":
+ {"sorryFree": true,
+  "exists": true,
+  "axioms": ["propext", "Classical.choice", "Quot.sound"]},
+ "LeanFM.CTLProofs.implication_rule":
+ {"sorryFree": true, "exists": true, "axioms": ["propext", "Quot.sound"]}}

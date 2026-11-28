@@ -51,6 +51,7 @@ meets its formula is tested, any other met entry proved; a hint has none. -/
 def Checked.standing (c : Checked) : String :=
   if c.failing then "failing"
   else if c.met && (c.verdict == "tested" || c.verdict == "conforms") then "tested"
+  else if c.met && c.verdict == "proof" then "proved"
   else if c.met then "proved"
   else if c.verdict == "true" then "hint"
   else "sorry"
@@ -103,35 +104,56 @@ def checkPointer (text : String) : Text.Pointer → Checked
         let v := get a "verdict"
         { verdict := v, met := v == "proved", failing := v != "proved", reading := get a "reading", ctl := some compiled }
 
-/-- The sessions of a session_conform answer, each one's labels in log order and whether it is complete. -/
-def runsOf (answer : Json) : List RunCheck.Run :=
-  let evs := ((answer.getObjValD "events").getArr?).toOption.getD #[]
-  let sessions := ((answer.getObjValD "sessions").getArr?).toOption.getD #[]
-  let ids := (evs.toList.map (get · "session")).eraseDups
-  ids.map fun sid =>
-    let mine := evs.filter fun e => get e "session" == sid && (e.getObjValD "act") != Json.bool true
-    let complete := (sessions.find? (get · "session" == sid)).any fun x => (x.getObjValD "complete") == Json.bool true
-    { labels := mine.map (get · "label"), complete }
+/-- The runs of a session_conform answer: a session nested in another (one of its events links, by
+prior or cause, to an event of an earlier session) is part of that session's run, so a run is a root
+session with its descendants, in log order; complete when its root is. Answers each run's root
+session and its events. -/
+def runGroups (answer : Json) (logged : Array Json := #[]) : List (String × Array Json) :=
+  let evs := (((answer.getObjValD "events").getArr?).toOption.getD #[]).filter fun e => (e.getObjValD "act") != Json.bool true
+  -- each logged event's session (as the answer places it), and the ids its prev and cause name
+  let sessionOf (id : String) : Option String := (evs.find? (get · "logId" == id)).map (get · "session")
+  let ids (j : Json) : List String := match j with
+    | .str x => [x] | .arr a => a.toList.filterMap (·.getStr?.toOption) | _ => []
+  let links (e : Json) : List String :=
+    match logged.find? (fun l => get l "id" == get e "logId") with
+    | some l => ids (l.getObjValD "prev") ++ ids (l.getObjValD "cause")
+    | none => []
+  let order := (evs.toList.map (get · "session")).eraseDups
+  let parent (s : String) : Option String :=
+    let mine := evs.toList.filter (get · "session" == s)
+    let earlier := order.takeWhile (· != s)
+    mine.findSome? fun e => (links e).findSome? fun i => (sessionOf i).filter fun t => t != s && earlier.contains t
+  let rec root (s : String) (fuel : Nat) : String :=
+    match fuel, parent s with
+    | 0, _ | _, none => s
+    | f + 1, some t => root t f
+  let roots := (order.map fun s => root s order.length).eraseDups
+  roots.map fun r => (r, evs.filter fun e => root (get e "session") order.length == r)
 
-/-- The ids of the first `k` events of session `i` of a conform answer. -/
-def prefixIds (answer : Json) (i k : Nat) : List String :=
-  let evs := ((answer.getObjValD "events").getArr?).toOption.getD #[]
-  let ids := (evs.toList.map (get · "session")).eraseDups
-  match ids[i]? with
+/-- The runs of a session_conform answer, each one's labels in log order and whether it is complete. -/
+def runsOf (answer : Json) (logged : Array Json := #[]) : List RunCheck.Run :=
+  let sessions := ((answer.getObjValD "sessions").getArr?).toOption.getD #[]
+  (runGroups answer logged).map fun (r, es) =>
+    let complete := (sessions.find? (get · "session" == r)).any fun x => (x.getObjValD "complete") == Json.bool true
+    { labels := es.map (get · "label"), complete }
+
+/-- The ids of the first `k` events of run `i` of a conform answer. -/
+def prefixIds (answer : Json) (i k : Nat) (logged : Array Json := #[]) : List String :=
+  match (runGroups answer logged)[i]? with
   | none => []
-  | some sid => ((evs.toList.filter fun e => get e "session" == sid && (e.getObjValD "act") != Json.bool true).take k).map (get · "logId")
+  | some (_, es) => (es.toList.take k).map (get · "logId")
 
 /-- Judge a formula on a conforming log's runs: tested, pending (not shown yet) or refuted. -/
-def judgeRuns (n φ : String) (answer : Json) : Checked :=
+def judgeRuns (n φ : String) (answer : Json) (logged : Array Json := #[]) : Checked :=
   let compiled : Compiled := { name := n, ruleCount := 1, formulas := [("formula", φ)] }
   match LeanFM.Logic.parseSexpr φ with
   | .error e => { failed e with ctl := some compiled }
   | .ok f =>
-    let runs := runsOf answer
+    let runs := runsOf answer logged
     match RunCheck.judge f runs with
     | .error e => { sorryChecked e with verdict := "unjudged", ctl := some compiled }
     | .ok j =>
-      let base := s!"{runs.length} session{if runs.length == 1 then "" else "s"} of the run conform to {n}; the formula is {j.value.name} on them"
+      let base := s!"{runs.length} run{if runs.length == 1 then "" else "s"} of the log conform to {n}; the formula is {j.value.name} on them"
       let weak := if j.untriggered.isEmpty then "" else
         "; tested only vacuously for " ++ ", ".intercalate (j.untriggered.map fun a => a.toJson.compress) ++ ", which no run makes happen"
       match j.value with
@@ -143,7 +165,7 @@ def judgeRuns (n φ : String) (answer : Json) : Checked :=
           reading := base ++ "; not shown yet: " ++ ", ".intercalate open_ }
       | .false_ =>
         let cx := match j.counterexample with
-          | some (i, k) => s!"; counterexample: the first {k} event{if k == 1 then "" else "s"} of session {i + 1} (" ++ ", ".intercalate (prefixIds answer i k) ++ ")"
+          | some (i, k) => s!"; counterexample: the first {k} event{if k == 1 then "" else "s"} of run {i + 1} (" ++ ", ".intercalate (prefixIds answer i k logged) ++ ")"
           | none => ""
         { verdict := "refuted", failing := true, ctl := some compiled, reading := base ++ cx }
 
@@ -157,16 +179,34 @@ def checkConform (text : String) (req : Text.Pointer) (events : Except String Js
     match Text.textThrough text n with
     | .error e => failed e
     | .ok t =>
-      match LeanFM.SessionTools.conform (Json.mkObj [("lean", Json.str t), ("events", evs)]) with
+      -- a session still running conforms as far as it goes; its end is judged by RunCheck (selfhost.requirements.standing)
+      match LeanFM.SessionTools.conform (Json.mkObj [("lean", Json.str t), ("events", evs), ("allowIncomplete", true)]) with
       | .error e => failed e
       | .ok a =>
         let v := get a "verdict"
         if v != "conforms" then
           { verdict := v, failing := true, reading := s!"session_conform against {n}: {v}: {get a "reading"}" }
         else match req with
-          | .formula _ φ => judgeRuns n φ a
+          | .formula _ φ => judgeRuns n φ a ((evs.getArr?).toOption.getD #[])
           | _ => { verdict := "conforms", met := true,
                    reading := s!"session_conform against {n}: conforms; the protocol's always properties hold on this run" }
+
+/-- `proof "Name"` (selfhost.requirements.proofs): judged from proofs.json, which the build writes by
+checking each theorem with Lean's kernel. The server never compiles or runs the theorem. -/
+def proofChecked (name : String) (proofs : Option Json) : Checked :=
+  match proofs with
+  | none => { verdict := "sorry", usesSorry := true, reading := s!"proof {name}: the proofs were not checked (no proofs.json beside the implementation; make selfhost-check writes it)" }
+  | some j =>
+    match j.getObjVal? name with
+    | .error _ => { verdict := "sorry", usesSorry := true, reading := s!"proof {name}: proofs.json has no line for it; make selfhost-check checks it" }
+    | .ok line =>
+      let exists_ := (line.getObjValD "exists") == Json.bool true
+      let free := (line.getObjValD "sorryFree") == Json.bool true
+      let axioms := ((line.getObjValD "axioms").getArr?).toOption.getD #[] |>.toList.filterMap (·.getStr?.toOption)
+      if !exists_ then failed s!"proof {name}: no such theorem in LeanFM.Proofs"
+      else if !free then failed s!"proof {name} rests on sorry (its axioms: {", ".intercalate axioms})"
+      else { verdict := "proof", met := true,
+             reading := s!"proof {name}: checked by Lean's kernel, free of sorry; its axioms: {if axioms.isEmpty then "none" else ", ".intercalate axioms}" }
 
 /-- A named test with no run: sorry, since only a run judged against the requirement counts as tested. -/
 def testChecked (name : String) : Checked :=
@@ -179,6 +219,8 @@ def status (req : Checked) (ev : Option Checked) : String :=
   let evPasses := (ev.map (·.met)).getD false
   let evFails := (ev.map (·.failing)).getD false
   if req.failing || evFails then "failing"
+  -- a theorem states the requirement, so passing proof evidence is proved whatever the requirement
+  else if evPasses && (ev.map (·.verdict)) == some "proof" then "proved"
   else if req.met && evPasses then "proved"
   else if evPasses then "tested"
   else "sorry"

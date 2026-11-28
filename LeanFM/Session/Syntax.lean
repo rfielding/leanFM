@@ -356,11 +356,15 @@ the protocols mean what they meant. LeanFM's tools transform each entry into CTL
 def elabRequirements : CommandElab := fun stx => do
   let body := stx[0]
   let mut seen : List String := []
+  let mut shorts : List String := []
   for e in body[2].getArgs do
-    let n ← withRef e[0] (read (Text.reqName e[0]))
-    if seen.contains n then throwErrorAt e[0] "requirement \"{n}\" is in the map twice"
+    let n ← withRef e[1] (read (Text.reqName e[1]))
+    if seen.contains n then throwErrorAt e[1] "requirement \"{n}\" is in the map twice"
     seen := n :: seen
-    let a := e[2][0]
+    if let some s := e[0].getOptional? then
+      if shorts.contains s.getId.toString then throwErrorAt s "the short name {s.getId} is in the map twice"
+      shorts := s.getId.toString :: shorts
+    let a := e[3][0]
     if a.isIdent then
       withRef a do
         let cs <- resolveGlobalName a.getId

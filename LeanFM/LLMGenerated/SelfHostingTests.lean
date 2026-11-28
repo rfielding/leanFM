@@ -9,7 +9,7 @@ open LeanFM.LLMGenerated.SelfHosting
 example : errors = [] := by native_decide
 example : spec.tasks.length = LeanFM.ChatUI.Requirements.spec.tasks.length + 2 := by native_decide
 example : spec.messages.length = LeanFM.ChatUI.Requirements.spec.messages.length + 14 := by native_decide
-example : clauses.length = 152 := by native_decide
+example : clauses.length = 153 := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.session.navigator" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.hosting" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.server-info" = true := by native_decide
@@ -44,5 +44,5 @@ example : protocolPathOk "LeanFM/LLMGenerated/LeanFM.leanfm" = true := by native
 example : ["/etc/x.leanfm", "a/../b.leanfm", "a//b.leanfm", "./a.leanfm", "x.lean", "", "a\\b.leanfm"].all (fun f => !protocolPathOk f) = true := by native_decide
 -- hazards are named like requirements; a mitigated one names its control and its test (selfhost.hazards)
 example : LeanFM.LLMGenerated.Hazards.errors = [] := by native_decide
-example : LeanFM.LLMGenerated.Hazards.hazards.length = 12 := by native_decide
-example : LeanFM.LLMGenerated.Hazards.openHazards.length = 2 := by native_decide
+example : LeanFM.LLMGenerated.Hazards.hazards.length = 13 := by native_decide
+example : LeanFM.LLMGenerated.Hazards.openHazards.length = 1 := by native_decide

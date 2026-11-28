@@ -152,7 +152,7 @@ def projectFilesTests : IO Unit := do
   expect "session_explore by file has a requirements node"
     (t.any fun n => kind n == "requirements" && (label n).startsWith "requirements: ")
   expect "the McpCall requirement stands proved, with its conform evidence under it"
-    (t.any (fun n => kind n == "requirement" && label n == "proved · Every MCP request a server takes is answered") &&
+    (t.any (fun n => kind n == "requirement" && label n == "proved · selfhost.session.event_log: Every MCP request a server takes is answered") &&
      t.any (fun n => kind n == "evidence" && (label n).contains "conform LeanFM/LLMGenerated/runs/mcp-call.jsonl"))
   let forged ← call "session_explore" (Json.mkObj [("project", "LeanFM"), ("file", "LeanFM/LLMGenerated/LeanFM.leanfm"),
     ("_requirements", Json.arr #[Json.mkObj [("id", "forged"), ("standing", "proved")]])])
@@ -164,7 +164,7 @@ def projectFilesTests : IO Unit := do
   expect "the implicit requirements of every LeanFM app are rows"
     (t.any (fun n => label n == "proved · protocol: LeanFMMcp checks with no issues") && t.any (fun n => label n == "proved · LeanFMMcp can always end"))
   expect "the first requirement row is the root protocol, labelled protocol:"
-    ((t.filter (kind · == "requirement"))[0]?.map label == some "proved · protocol: The MCP conversation follows LeanFMMcp")
+    ((t.filter (kind · == "requirement"))[0]?.map label == some "proved · protocol: selfhost.session.real_events: The MCP conversation follows LeanFMMcp")
   expect "the protocol's structure sits under a requirement row"
     (t.any fun n => kind n == "protocol" && (parentOf n).any fun q => t.any fun m => (m.getObjValAs? Nat "id").toOption == some q && kind m == "requirement")
   expect "every protocol of the file has its interaction diagram under a requirement row"
@@ -273,20 +273,22 @@ def projectViewTests : IO Unit := do
   -- the requirement and implementation lists (selfhost.requirements.list, .map, selfhost.implementations.map)
   let overview := (((← IO.ofExcept (Json.parse lreq)).getObjValD "result").getObjValD "structuredContent").getObjValD "sections"
   let sec (n : String) := ((overview.getArr?).toOption.getD #[]).find? fun x => (x.getObjValAs? String "name").toOption == some n
-  let nClauses := LeanFM.LLMGenerated.SelfHosting.clauses.length
+  -- a clause an entry of LeanFM's map formalizes (its short name is the clause id) is not a sorry row
+  let formalized := 9
+  let nClauses := LeanFM.LLMGenerated.SelfHosting.clauses.length - formalized
   let num (j : Option Json) (k : String) : Nat := ((j.map (·.getObjValAs? Nat k |>.toOption)).join).getD 999999
   let rq := sec "requirements"
   let kinds := (rq.map (·.getObjValD "kinds"))
   -- the formulas are counted from LeanFM.leanfm's requirements block, so adding one needs no new number here
   let nFormulas := (((← IO.FS.readFile "LeanFM/LLMGenerated/LeanFM.leanfm").splitOn "requirements {").getLast!.splitOn "⊨").length - 1
-  expect s!"the overview counts LeanFM's requirements: 1 protocol, {nFormulas} formulas (its requirements block), the clauses as sorry, all {nFormulas + 1} met, none failing"
-    (num kinds "protocol" == 1 && num kinds "formula" == nFormulas && num kinds "sorry" == nClauses && num rq "met" == nFormulas + 1 && num rq "failing" == 0)
+  expect s!"the overview counts LeanFM's requirements: 1 protocol, {nFormulas} formulas (its requirements block), the clauses and six entries Lean theorems answer as sorry, all {nFormulas + 1} met, none failing"
+    (num kinds "protocol" == 1 && num kinds "formula" == nFormulas && num kinds "sorry" == nClauses + 6 && num rq "met" == nFormulas + 1 && num rq "failing" == 0)
   let im := sec "implementations"
   let leanImpl := (((im.map (·.getObjValD "implementations")).map (·.getArr?.toOption.getD #[])).getD #[]).find? fun x =>
     (x.getObjValAs? String "impl").toOption == some "Lean"
   let st := leanImpl.map (·.getObjValD "status")
-  expect "the overview lists implementation Lean: 1 proved (McpCall, by its run), 8 sorry, none failing, 3 hints"
-    (num st "proved" == 1 && num st "tested" == 0 && num st "sorry" == 8 && num st "failing" == 0 && num leanImpl "hints" == 3)
+  expect "the overview lists implementation Lean: all 15 proved, nine by real runs and six by Lean theorems, none sorry, none failing, 3 hints"
+    (num st "proved" == 15 && num st "tested" == 0 && num st "sorry" == 0 && num st "failing" == 0 && num leanImpl "hints" == 3)
   let itemsOf (r : String) : IO (Array Json) := do
     pure ((((((← IO.ofExcept (Json.parse r)).getObjValD "result").getObjValD "structuredContent").getObjValD "page").getObjValD "items").getArr?.toOption.getD #[])
   let ritems ← itemsOf (← pvCall "{\"stage\":\"requirements\",\"section\":\"requirements\"}")
@@ -298,14 +300,17 @@ def projectViewTests : IO Unit := do
   expect "every formula opens in the CTL view, proved and met, its CTL the formula"
     ((ritems.filter (field · "kind" == "formula")).size == nFormulas && (ritems.filter (field · "kind" == "formula")).all fun it =>
       field it "viewer" == "ctl" && field it "verdict" == "proved" && isTrue it "met" && (it.getObjValD "ctl").compress.contains (field it "formula"))
+  expect "a formalized clause is listed by its entry, not as a sorry row"
+    (!(ritems.any fun it => field it "id" == "selfhost.session.event-log" && field it "kind" == "sorry") &&
+     ritems.any fun it => field it "formalizes" == "selfhost.session.event-log" && field it "short" == "selfhost.session.event_log")
   expect "the clauses are sorry: never met, never failing, shown as text"
     (ritems.any fun it => field it "id" == "selfhost.revision" && field it "kind" == "sorry" && isTrue it "sorry" &&
       !isTrue it "met" && !isTrue it "failing" && field it "viewer" == "text")
   let iitems ← itemsOf (← pvCall "{\"stage\":\"requirements\",\"section\":\"implementations\"}")
-  expect "section implementations: a conforming run that meets the McpCall formula stands proved; a bare test and sorry evidence are sorry"
+  expect "section implementations: a conforming run that meets the McpCall formula stands proved; no bare test or sorry remains"
     (iitems.any (fun it => field it "kind" == "conform" && field it "status" == "proved" && field it "verdict" == "tested") &&
-     iitems.any (fun it => field it "kind" == "test" && field it "status" == "sorry" && isTrue it "sorry") &&
-     iitems.any (fun it => field it "kind" == "sorry" && field it "status" == "sorry" && isTrue it "sorry"))
+     iitems.all (fun it => field it "kind" != "test") &&
+     iitems.all (fun it => field it "kind" != "sorry"))
   expect "the implementation's own CTL is proved, and its hints convert to true"
     (iitems.any (fun it => field it "id" == "Every read of the project root is answered" && field it "verdict" == "proved" && isTrue it "met") &&
      (iitems.filter (field · "kind" == "hint")).size == 3 && (iitems.filter (field · "kind" == "hint")).all (field · "verdict" == "true"))
@@ -476,6 +481,8 @@ def main : IO Unit := do
   assertContains "MCP check_signal answers the margin" sig.body "\"margin\":-1.1"
   let sigLog ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"tools/call\",\"params\":{\"name\":\"check_signal\",\"arguments\":{\"claim\":\"(always (below temp 26))\",\"serverLog\":\"devices\"}}}"
   assertContains "MCP check_signal refuses serverLog where server_logs is not served" sigLog.body "\"isError\":true"
+  let bye ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":16,\"method\":\"leanfm/bye\",\"params\":{}}"
+  assertContains "MCP answers leanfm/bye, the end of a host's conversation, with an empty result" bye.body "\"result\":{}"
   assertContains "MCP lists reduce_run" toolsListed.body "\"name\":\"reduce_run\""
   let red ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"tools/call\",\"params\":{\"name\":\"reduce_run\",\"arguments\":{\"program\":\"(/ (count (events \\\"Refund\\\")) (count (events)))\",\"events\":[{\"label\":\"Order\"},{\"label\":\"Order\"},{\"label\":\"Refund\"}]}}}"
   assertContains "MCP reduce_run answers an exact value" red.body "\"exact\":\"1/3\""

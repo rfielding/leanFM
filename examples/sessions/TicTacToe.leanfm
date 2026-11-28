@@ -29,9 +29,9 @@ protocol TicTacToe (X, O, Referee) {
 }
 
 requirements {
-  "Every game ends with a result" => TicTacToe ⊨ (inevitably (on Result));
-  "O moves only after the game starts" => TicTacToe ⊨ (precedes (on Joined) (on MoveO));
-  "O moves only when told it is its turn" => TicTacToe ⊨ (precedes (on OTurn) (on MoveO));
-  "Every move by X is answered" => TicTacToe ⊨ (stronglyImplies (on MoveX) (inevitably (or (on OTurn) (on Result))));
-  "A game can always still end" => TicTacToe ⊨ (always (possibly stop));
+  GameEnds "Every game ends with a result" => TicTacToe ⊨ (inevitably (on Result));
+  OAfterStart "O moves only after the game starts" => TicTacToe ⊨ (precedes (on Joined) (on MoveO));
+  OOnTurn "O moves only when told it is its turn" => TicTacToe ⊨ (precedes (on OTurn) (on MoveO));
+  XAnswered "Every move by X is answered" => TicTacToe ⊨ (stronglyImplies (on MoveX) (inevitably (or (on OTurn) (on Result))));
+  CanEnd "A game can always still end" => TicTacToe ⊨ (always (possibly stop));
 }

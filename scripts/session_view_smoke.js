@@ -610,7 +610,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     button(bar.all().find((n) => n.className.split(" ").includes("specrow")), "files & sections").click(); await wait(200);
     sectionButton("implementations").click(); await wait(200);
     if (navSent()?.params.arguments.section !== "implementations") throw new Error("the implementations section was not asked for");
-    expectText("the implementations section shows evidence with its status", byId.results, "Lean · test · The MCP conversation follows LeanFMMcp");
+    expectText("the implementations section shows evidence with its status", byId.results, "Lean · conform · The MCP conversation follows LeanFMMcp");
     expectText("a hint converts to true", byId.results, "Lean · hint · hint 1");
     console.log("ok: the implementations section lists evidence, the implementation's own CTL and its hints");
     button(bar, "spec").click(); await wait(300);

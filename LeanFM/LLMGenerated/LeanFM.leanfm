@@ -111,13 +111,19 @@ protocol LeanFMMcp (Agent, Host, View, Server, Disk) {
 /- LeanFM's own requirements (clause selfhost.requirements.map): each converts to CTL, or uses sorry.
    The clauses of SelfHosting.lean join this list as sorry entries until one of these replaces them. -/
 requirements {
-  "Every MCP request a server takes is answered" => McpCall ⊨ (stronglyImplies (on Call) (inevitably (on Answer)));
-  "A server listens only after reaching main" => ServerStart ⊨ (precedes (on MainEntered) (on Listening));
-  "The MCP conversation follows LeanFMMcp" => LeanFMMcp;
-  "No project view or tool before the server is initialized" => LeanFMMcp ⊨ (precedes (on Initialized) (or (on ProjectView) (on SessionTool)));
-  "Every page the view asks for is shown or refused" => LeanFMMcp ⊨ (always (implies (on Page) (inevitably (or (on Paged) (on Refused)))));
-  "Every protocol the view loads is drawn or refused" => LeanFMMcp ⊨ (always (implies (on Load) (inevitably (or (on Drawn) (on Refused)))));
-  "A file the project does not list is refused" => LeanFMMcp ⊨ (always (implies (on NotListed) (allNext (on Refused))));
-  "The session ends only with Bye" => LeanFMMcp ⊨ (always (implies stop (on ByeDone)));
-  "The session can always end" => LeanFMMcp ⊨ (always (possibly stop));
+  selfhost.session.event_log "Every MCP request a server takes is answered" => McpCall ⊨ (stronglyImplies (on Call) (inevitably (on Answer)));
+  selfhost.env.launch "A server listens only after reaching main" => ServerStart ⊨ (precedes (on MainEntered) (on Listening));
+  selfhost.session.real_events "The MCP conversation follows LeanFMMcp" => LeanFMMcp;
+  InitializedFirst "No project view or tool before the server is initialized" => LeanFMMcp ⊨ (precedes (on Initialized) (or (on ProjectView) (on SessionTool)));
+  selfhost.mcp.session.navigator "Every page the view asks for is shown or refused" => LeanFMMcp ⊨ (leadsTo (on Page) (or (on Paged) (on Refused)));
+  LoadsAnswered "Every protocol the view loads is drawn or refused" => LeanFMMcp ⊨ (leadsTo (on Load) (or (on Drawn) (on Refused)));
+  selfhost.mcp.session.project_files "A file the project does not list is refused" => LeanFMMcp ⊨ (stronglyImplies (on NotListed) (allNext (on Refused)));
+  selfhost.mcp.session.standalone "The session ends only with Bye" => LeanFMMcp ⊨ (always (implies stop (on ByeDone)));
+  CanAlwaysEnd "The session can always end" => LeanFMMcp ⊨ (always (possibly stop));
+  selfhost.mcp.logic.implication "When a trigger can never happen, a feature written with strong implication fails and a guarantee written with weak implication holds, in every model" => sorry "a property of CTL's semantics, proved for every model";
+  selfhost.mcp.limits "A call that raises a limit gets at most the limit's default times the operator's factor, whatever it asks for" => sorry "a property of CallLimits.validate, proved for every argument";
+  PathsInside "A protocol file a requirement or a tool names stays inside the project: never absolute, never with a .. or empty part or a backslash, and a project's name never holds / or ." => sorry "a property of LeanFM's path checks, not of a protocol";
+  selfhost.requirements.standing "A run is judged with four values: not twice is the identity, and and or commute, De Morgan holds, one run never refutes a possibly nor proves an always" => sorry "a property of RunCheck, the run judge, not of a protocol";
+  SettingsChecked "A switch read at startup is the default only when absent or empty, true only for 1 or true, false only for 0 or false, every other value refused; a limit ceiling or tick budget read is at least 1" => sorry "a property of the startup parsers, proved for every input";
+  SecretsUnwritten "A secret variable's setting in a server's MainEntered event is the same whatever its value" => sorry "a property of Env.entry, proved for every value";
 }

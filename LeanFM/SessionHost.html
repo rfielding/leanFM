@@ -167,12 +167,28 @@ function viewSettled(quietMs = 200, maxMs = 3000) {
 function viewDone() { const w = idleWaiters; idleWaiters = []; w.forEach((f) => f()); }
 function mark(which) { showing = which; for (const [k, btn] of Object.entries(buttons)) btn.setAttribute("aria-pressed", String(k === which)); }
 
+// the end of the conversation (selfhost.session.real-events): the view closes, the host is done with
+// the Open, the agent quits, and leanfm/bye is LeanFMMcp's Bye, answered ByeDone. Once, on pagehide or
+// when a driver calls it.
+let openEvent = null, ended = false;
+async function bye() {
+  if (ended || !openEvent) return false;
+  ended = true;
+  await hostEvent("Close", null, viewSession);
+  await hostEvent("Done", openEvent);
+  const quit = await hostEvent("Quit");
+  await mcp("leanfm/bye", {}, quit);
+  return true;
+}
+window.addEventListener("pagehide", () => { bye(); });
+
 async function openFirst() {
   if (opened) return;
   opened = true;
   try {
     await started;
     const open = await hostEvent("Open");
+    openEvent = open;
     const result = await mcp("tools/call", { name: "project_view", arguments: firstArguments() }, open);
     await shownOrFailed(result, open);
     toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: result });

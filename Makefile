@@ -87,7 +87,8 @@ requirements-check:
 	lake env lean --run LeanFM/RequirementsCheck.lean --files examples/orders/Requirements.leanfm examples/orders/Implementation.leanfm
 
 selfhost-check:
-	lake build LeanFM.LLMGenerated.Requirements LeanFM.LLMGenerated.SelfHostingTests
+	lake build LeanFM.LLMGenerated.Requirements LeanFM.LLMGenerated.SelfHostingTests LeanFM.Proofs
+	lake env lean --run ProofCheck.lean
 	lake env lean LeanFM/LLMGenerated/SelfHostingTests.lean
 	lake env lean --run LeanFM/RequirementsCheck.lean
 	lake env lean --run ReviewSelfHosting.lean

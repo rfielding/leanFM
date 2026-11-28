@@ -209,11 +209,45 @@ since only its end shows that no Answer will come. The guarantee is tested by a 
 withdrawal, and the answer says its trigger never happened. One run with a refund shows the
 possibility; a run without one only fails to show it.
 
-{\sloppy A bare test name gives no run to judge, so it is sorry. LeanFM's own first tested requirement
-is \emph{Every MCP request a server takes is answered}: \texttt{make run-log-check} drives
-\texttt{leanfm-mcp} as any MCP client would, writes one Call and one Answer per request to
-\texttt{LeanFM/LLMGenerated/runs/mcp-call.jsonl}, and the implementation names that log with
-\texttt{conform}. Its formula is also proved over McpCall, so it stands proved.\par}
+{\sloppy A bare test name gives no run to judge, so it is sorry. Every requirement of LeanFM's own
+map stands on real runs of the current build. \texttt{make run-log-check} drives
+\texttt{leanfm-mcp} as any MCP client would, for McpCall. It then starts a server of its own and
+opens LeanFM's viewer against it in a headless browser. The viewer loads a protocol file and asks
+for one the project does not list, and the conversation ends with Close, Done, Quit, Bye and
+ByeDone. That conversation's LeanFMMcp events, and the server's own ServerStart events, are the
+runs \texttt{LeanFMImplementation.leanfm} names with \texttt{conform}. Each formula is also proved
+over its protocol, so each stands proved. Two things this showed: a run is a root session with the
+sessions nested in it, because the view's browsing is nested inside the conversation; and a
+conversation could not end at all until LeanFM answered Bye.\par}
+
+\section{Proved by Lean}
+
+A run shows what one path can. A Lean theorem shows a property of the code for every input, and
+Lean's kernel checks it. An implementation may name a theorem as evidence:
+
+\begin{lstlisting}[language={}]
+-- from LeanFM/LLMGenerated/LeanFMImplementation.leanfm
+  "selfhost.requirements.standing" => proof "LeanFM.RunCheck.Proofs.standing_laws";
+\end{lstlisting}
+
+\texttt{make selfhost-check} imports the theorems and asks the kernel which axioms each one rests
+on. It writes the answer to \texttt{proofs.json} beside the implementation, and the server only
+reads that file. A theorem that rests on \texttt{sorryAx} is failing, and one the file does not
+list is sorry. LeanFM's first such theorem is the laws of run judging's four values: \texttt{not}
+twice is the identity, \texttt{and} and \texttt{or} commute, De Morgan holds both ways, and one run
+never refutes a \textsf{possibly} or proves an \textsf{always}. Its only axiom is \texttt{propext}. Two more follow it. The path checks refuse an absolute path, a \texttt{..} part and a backslash,
+for every input, not only for the inputs a test tries. And the implication rule from the Preface
+holds in every model. LeanFM's CTL checker is written with recursion Lean cannot reason about, so
+the theorem is stated over a total semantics of the same formulas: when the trigger can never happen,
+\texttt{(stronglyImplies a b)} is false at every state and \texttt{(always (implies a b))} is true at
+every state. The checker is tested against that semantics; proving the two equal is the next step.
+
+Three more are about the servers. A call never raises a limit past the operator's ceiling,
+whatever it asks for. A switch read at startup is true only for \texttt{1} or \texttt{true},
+false only for \texttt{0} or \texttt{false}, and refuses every other value. A secret's entry in the
+\texttt{MainEntered} event is the same whatever the secret's value is, so the value can't be in it.
+Stating the switch theorem found a bug: an empty value was read as off, even when the default was
+on. Now an empty value takes the default.
 
 A requirement an implementation does not name counts as sorry for it. The shop:
 

@@ -680,6 +680,7 @@ def requestLabel (method tool : String) : Option String :=
   match method with
   | "initialize" => some "Initialize"
   | "tools/list" => some "ListTools"
+  | "leanfm/bye" => some "Bye"
   | "tools/call" => if tool == "project_view" then some "ProjectView" else if tool.startsWith "session_" then some "SessionTool" else none
   | _ => none
 
@@ -704,6 +705,7 @@ def answerLabel (req : String) (page : Bool) (reply : Response) : String :=
   match req with
   | "Initialize" => if isErr then "InitializeError" else "Initialized"
   | "ListTools" => if isErr then "ListToolsError" else "Tools"
+  | "Bye" => "ByeDone"
   | "ProjectView" =>
     if !isErr then (if page then "PageShown" else "Shown")
     else if notListed then "NotListed" else if overBound then (if page then "OverBound" else "TooLarge") else "ViewError"
@@ -846,6 +848,8 @@ def dispatchJsonCore (request : Json) (trace : Option Trace := none) : IO Respon
         match result with
         | .ok result => pure <| ok id result
         | .error err => pure <| rpcError id (-32602) err
+  -- the end of a host's conversation (selfhost.session.real-events): nothing to release, so an empty result
+  | "leanfm/bye" => pure <| ok id (Json.mkObj [])
   | "prompts/list" => pure <| ok id <| Json.mkObj [("prompts", Json.arr prompts)]
   | "prompts/get" =>
       match stringField params "name" with

@@ -88,6 +88,36 @@ def run (amount : Nat) : Json := Json.arr #[ev "o1" "CreateOrder" "Client" "Shop
 #guard (checkPointer two (.protocol "PlaceOrder")).standing == "proved"
 #guard (sorryChecked "").standing == "sorry"
 
+-- proof evidence, judged from proofs.json (selfhost.requirements.proofs)
+def proofs : Json := Json.mkObj [
+  ("Good", Json.mkObj [("exists", true), ("axioms", Json.arr #["propext"]), ("sorryFree", true)]),
+  ("Bad", Json.mkObj [("exists", true), ("axioms", Json.arr #["sorryAx"]), ("sorryFree", false)]),
+  ("Gone", Json.mkObj [("exists", false), ("axioms", Json.arr #[]), ("sorryFree", false)])]
+#guard let c := proofChecked "Good" (some proofs); c.met && c.verdict == "proof" && c.standing == "proved"
+#guard let c := proofChecked "Bad" (some proofs); c.failing && (c.reading.splitOn "rests on sorry").length > 1
+#guard (proofChecked "Gone" (some proofs)).failing
+#guard let c := proofChecked "Unlisted" (some proofs); c.usesSorry && !c.met && !c.failing
+#guard (proofChecked "Good" none).usesSorry
+#guard status (sorryChecked "") (some (proofChecked "Good" (some proofs))) == "proved"
+#guard status (sorryChecked "") (some (proofChecked "Bad" (some proofs))) == "failing"
+#guard match Text.readMaps "import LeanFM.Session.Syntax\nimplementation Go of Orders.Requirements {\n  \"pay\" => proof \"Orders.payProof\";\n}\n" with
+  | .ok (_, a) => a.impls.toList.any fun d => d.entries == [("pay", .proof "Orders.payProof")]
+  | .error _ => false
+
+-- short names: an identifier before the sentence, unique in the map
+#guard match Text.readText (withMap "  Placed \"placed\" => PlaceOrder;\n  \"pay\" => PlaceOrder ⊨ (AG (EF stop));\n") with
+  | .ok (_, a) => a.reqShort.toList == [("Placed", "placed")] && (a.reqMap.getD #[]).size == 2
+  | .error _ => false
+#guard refused (withMap "  A \"x\" => sorry;\n  A \"y\" => sorry;\n") "the short name A is in the map twice"
+
+-- a nested session is judged with the session around it (selfhost.requirements.standing)
+def nest := "protocol Nest (A, B) {\n  i: Init from A to B;\n  sessions {\n    q: Q from A to B;\n    R from B to A cause q;\n  }\n}\n"
+def nested : Json := Json.arr #[
+  Json.mkObj [("id", "i1"), ("session", "s"), ("from", "A"), ("to", "B"), ("label", "Init")],
+  Json.mkObj [("id", "q1"), ("session", "s-1"), ("from", "A"), ("to", "B"), ("label", "Q"), ("prev", Json.arr #["i1"])],
+  Json.mkObj [("id", "r1"), ("session", "s-1"), ("from", "B"), ("to", "A"), ("label", "R"), ("cause", "q1")]]
+#guard let c := checkConform nest (.formula "Nest" "(precedes (on Init) (on Q))") (.ok nested)
+  c.met && c.verdict == "tested" && (c.reading.splitOn "1 run of the log").length > 1
 end LeanFM.Session.RequirementMapsTests
 
 -- the two block words stay identifiers in a module that imports the library, so a project's own

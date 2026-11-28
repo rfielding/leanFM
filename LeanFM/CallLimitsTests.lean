@@ -39,6 +39,7 @@ def has (s part : String) : Bool := (s.splitOn part).length > 1
 #guard refused (parseCeiling (some "lots")) "LEANFM_LIMIT_CEILING"
 #guard (MCPHost.parseSwitch "LEANFM_MCP_LOGS" false (some "TRUE") |>.toOption) == some true
 #guard (MCPHost.parseSwitch "LEANFM_MCP_LOGS" false none).toOption == some false
+#guard (MCPHost.parseSwitch "LEANFM_MCP_TRUST_PROXY" true (some "  ")).toOption == some true
 #guard refused (MCPHost.parseSwitch "LEANFM_MCP_LOGS" false (some "yes")) "LEANFM_MCP_LOGS must be 0, 1, true or false"
 
 /-! Each registered limit, reached and named with the argument that raises it -/

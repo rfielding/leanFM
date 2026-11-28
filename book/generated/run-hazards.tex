@@ -13,7 +13,8 @@ hazard & status & never \\
 \texttt{path.escape} & mitigated & the server reads a file outside the project root it was asked about \\
 \texttt{connections.exhaustion} & mitigated & more than LEANFM\_MAX\_CONNECTIONS connections are open at once \\
 \texttt{request.size} & mitigated & a body over requestBytes is read \\
-\texttt{disk.exhaustion} & open & a LeanFM process fills the disk \\
-\texttt{files.handles} & open & a request fails because the process ran out of file handles \\
+\texttt{disk.exhaustion} & mitigated & a LeanFM process fills the disk while serving \\
+\texttt{logs.retention} & open & a log LeanFM's tools read fills the disk \\
+\texttt{files.handles} & mitigated & a request fails because the process ran out of file handles \\
 \bottomrule
 \end{longtable}

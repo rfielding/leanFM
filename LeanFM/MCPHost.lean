@@ -39,14 +39,15 @@ private def envNat (name : String) (default : Nat) : IO Nat := do
     | some n => pure n
     | none => throw <| IO.userError s!"{name} must be a decimal number"
 
-/-- A switch read at startup: absent is `default`; 0, 1, true and false are accepted; anything else
-stops the server naming the variable (selfhost.env.startup). -/
+/-- A switch read at startup: absent or empty is `default`; 0, 1, true and false are accepted;
+anything else stops the server naming the variable (selfhost.env.startup). -/
 def parseSwitch (name : String) (default : Bool) (raw : Option String) : Except String Bool :=
   match raw with
   | none => .ok default
   | some raw => match raw.trimAscii.toString.toLower with
+    | "" => .ok default
     | "1" | "true" => .ok true
-    | "0" | "false" | "" => .ok false
+    | "0" | "false" => .ok false
     | other => .error s!"{name} must be 0, 1, true or false, not {other}"
 
 def envSwitch (name : String) (default : Bool) : IO Bool := do

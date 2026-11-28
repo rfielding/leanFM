@@ -55,4 +55,4 @@ jobs:
       - name: Check generated protocol outputs are current
         run: |
           lake env lean --run NeedhamSchroeder.lean
-          git diff --exit-code -- book/generated SELF_HOSTING_REVIEW.md
+          git diff --exit-code -- book/generated SELF_HOSTING_REVIEW.md LeanFM/LLMGenerated/proofs.json

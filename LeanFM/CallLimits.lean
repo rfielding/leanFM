@@ -90,6 +90,19 @@ structure Applied where
   applied : Nat
   deriving Repr
 
+/-- One requested limit, applied: the request, but never past the default times the operator's factor
+(selfhost.mcp.limits). LeanFM.LimitProofs proves the bound. -/
+def cap (l : Limit) (k : String) (n factor : Nat) : Applied :=
+  { name := k, requested := n, applied := min n (l.default * factor) }
+
+/-- One entry of the `limits` argument: a known limit and a whole number of at least 1, capped. -/
+def applyEntry (factor : Nat) (kv : String × Json) : Except String Applied :=
+  match registry.find? (·.name == kv.1) with
+  | none => .error s!"limits: unknown limit {kv.1}; the limits are {known}"
+  | some l => match kv.2.getNat? with
+    | .ok n => if n ≥ 1 then .ok (cap l kv.1 n factor) else .error s!"limits: {kv.1} must be a whole number of at least 1"
+    | .error _ => .error s!"limits: {kv.1} must be a whole number of at least 1"
+
 /-- Check the `limits` argument and cap each value at its default times `factor`. Absent is
 nothing; anything malformed is refused naming the known limits. -/
 def validate (args : Json) (factor : Nat) : Except String (List Applied) := do
@@ -97,13 +110,7 @@ def validate (args : Json) (factor : Nat) : Except String (List Applied) := do
   | .error _ => return []
   | .ok Json.null => return []
   | .ok (.obj kvs) =>
-    kvs.toList.mapM fun (k, v) => do
-      let some l := registry.find? (·.name == k)
-        | throw s!"limits: unknown limit {k}; the limits are {known}"
-      let n ← match v.getNat? with
-        | .ok n => if n ≥ 1 then pure n else throw s!"limits: {k} must be a whole number of at least 1"
-        | .error _ => throw s!"limits: {k} must be a whole number of at least 1"
-      pure { name := k, requested := n, applied := min n (l.default * factor) }
+    kvs.toList.mapM (applyEntry factor)
   | .ok _ => throw s!"limits must be an object of limit names and whole numbers, such as \{\"states\": 100000}; the limits are {known}"
 
 /-- The arguments with `limits` replaced by the applied values. -/
