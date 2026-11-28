@@ -90,4 +90,8 @@ def disagreements : Nat :=
 
 example : disagreements = 0 := by native_decide
 
+/-- The check `holds` makes passes on every one of those models, from every state. -/
+example : ([1, 2, 3].all fun n => (succFns n).all fun succ => (List.range n).all fun s => CTL.explorationOk succ s) = true := by
+  native_decide
+
 end LeanFM

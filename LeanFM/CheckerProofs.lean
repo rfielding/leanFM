@@ -407,4 +407,44 @@ theorem checker_proved :
   ⟨lfp_fixpoint, label_ex, label_ax, label_eu, label_ef, label_ag, checker_implication_rule,
    gfp_fixpoint, label_au, label_af, label_eg, label_ew, label_aw⟩
 
+/-! ## The checker as LeanFM calls it
+
+`holds` checks the explored list before it answers; when the check passes, its verdict is the
+labelling over a closed list that holds the start, so every theorem above is a theorem of `holds`. -/
+
+theorem closedB_iff (states : List S) (succ : S → List S) : closedB states succ = true ↔ Closed states succ := by
+  simp [closedB, Closed, List.all_eq_true]
+
+theorem holds_checked (succ : S → List S) (s : S) (f : CTL S) (h : explorationOk succ s = true) :
+    holds succ s f = mem (label (explored succ s) succ f) s ∧
+      Closed (explored succ s) succ ∧ s ∈ explored succ s := by
+  simp only [explorationOk, Bool.and_eq_true] at h
+  have hs : s ∈ explored succ s := by simpa using h.2
+  refine ⟨?_, (closedB_iff _ _).mp h.1, hs⟩
+  simp [holds, h.1, hs]
+
+/-- The implication rule, of `holds`: when the trigger holds at no explored state, a strong
+implication does not hold and the plain always-implies does. -/
+theorem holds_implication_rule (succ : S → List S) (s : S) (p q : CTL S) (h : explorationOk succ s = true)
+    (hp : label (explored succ s) succ p = []) :
+    holds succ s (CTL.stronglyImplies p q) = false ∧ holds succ s (CTL.ag (CTL.implies p q)) = true := by
+  obtain ⟨h1, hc, hs⟩ := holds_checked succ s (CTL.stronglyImplies p q) h
+  obtain ⟨h2, _, _⟩ := holds_checked succ s (CTL.ag (CTL.implies p q)) h
+  rw [h1, h2]
+  exact checker_implication_rule _ succ hc p q hp s hs
+
+/-- What `holds` is, as one statement: when its check passes, it is the labelling over a closed list
+holding the start (where checker_proved applies), and the implication rule holds of it. -/
+theorem holds_proved :
+    (∀ (states : List S) succ, closedB states succ = true ↔ Closed states succ) ∧
+    (∀ succ (s : S) f, explorationOk succ s = true →
+      holds succ s f = mem (label (explored succ s) succ f) s ∧ Closed (explored succ s) succ ∧ s ∈ explored succ s) ∧
+    (∀ succ (s : S) p q, explorationOk succ s = true → label (explored succ s) succ p = [] →
+      holds succ s (CTL.stronglyImplies p q) = false ∧ holds succ s (CTL.ag (CTL.implies p q)) = true) :=
+  ⟨closedB_iff, holds_checked, holds_implication_rule⟩
+
+/-- The checker and `holds`, as one statement an implementation names (CheckerProved). -/
+theorem holds_and_checker_proved : type_of% (@checker_proved S _) ∧ type_of% (@holds_proved S _) :=
+  ⟨checker_proved, holds_proved⟩
+
 end LeanFM.CheckerProofs

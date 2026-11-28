@@ -112,8 +112,23 @@ partial def explore [DecidableEq S] (succ : S → List S) (seen frontier : List 
     let next := ((frontier.flatMap succ).eraseDups).filter fun t => !seen.contains t
     explore succ (seen ++ next) next
 
+/-- Every successor of every listed state is listed. -/
+def closedB [DecidableEq S] (states : List S) (succ : S → List S) : Bool :=
+  states.all fun s => (succ s).all fun t => states.contains t
+
+/-- The states explored from `s`. -/
+def explored [DecidableEq S] (succ : S → List S) (s : S) : List S := explore succ [s] [s]
+
+/-- The check `holds` makes before it answers: the explored list holds `s` and is closed. -/
+def explorationOk [DecidableEq S] (succ : S → List S) (s : S) : Bool :=
+  closedB (explored succ s) succ && (explored succ s).contains s
+
+/-- Whether `f` holds at `s`: the labelling over the states explored from `s`, after checking them
+(clause selfhost.mcp.logic.checker). -/
 def holds [DecidableEq S] (succ : S -> List S) (s : S) (f : CTL S) : Bool :=
-  mem (label (explore succ [s] [s]) succ f) s
+  let st := explored succ s
+  if closedB st succ && st.contains s then mem (label st succ f) s
+  else panic! "CTL.holds: the explored states are not closed under their successors"
 
 end CTL
 end LeanFM

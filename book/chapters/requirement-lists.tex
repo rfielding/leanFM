@@ -252,8 +252,9 @@ each fixpoint iteration ends at a fixpoint, and that all 14 operators are exact.
 
 The \textsf{possibly} words and \textsf{allUntil} are exact over paths that reach their target within
 finitely many steps. \textsf{someAlways} and the \textsf{unless} words are exact as the largest set of
-states that can keep going. A deadlock ends a path. One step stays unproved: that exploring finds every
-successor. On every model of up to three states, the checker also agrees with the earlier depth-first
+states that can keep going. A deadlock ends a path. Exploring the states is not proved; instead \texttt{holds} checks, on
+every call, that the explored states include every successor, so each theorem is a theorem of
+\texttt{holds}. On every model of up to three states, the checker also agrees with the earlier depth-first
 checker for 879,200 formula and state pairs.
 
 Three more are about the servers. A call never raises a limit past the operator's ceiling,

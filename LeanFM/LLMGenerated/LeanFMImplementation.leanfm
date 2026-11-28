@@ -20,7 +20,7 @@ implementation Lean of LeanFM.LLMGenerated.LeanFM {
   "selfhost.mcp.limits" => proof "LeanFM.LimitProofs.validate_within_ceiling";
   "SettingsChecked" => proof "LeanFM.StartupProofs.startup_checked";
   "SecretsUnwritten" => proof "LeanFM.StartupProofs.secret_never_written";
-  "CheckerProved" => proof "LeanFM.CheckerProofs.checker_proved";
+  "CheckerProved" => proof "LeanFM.CheckerProofs.holds_and_checker_proved";
   hint "Implement in Lean 4; the server is one executable built with lake";
   hint "The MCP surface is read-only: no tool writes, renames or deletes a file";
   hint "Read the project root only through ProjectView.inside, so a symlink cannot escape it";

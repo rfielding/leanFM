@@ -16,7 +16,7 @@
  {"sorryFree": true,
   "exists": true,
   "axioms": ["propext", "Classical.choice", "Quot.sound"]},
- "LeanFM.CheckerProofs.checker_proved":
+ "LeanFM.CheckerProofs.holds_and_checker_proved":
  {"sorryFree": true,
   "exists": true,
   "axioms": ["propext", "Classical.choice", "Quot.sound"]},
