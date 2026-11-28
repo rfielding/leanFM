@@ -1,4 +1,6 @@
 SHELL := /usr/bin/env bash
+# elan's Lean and Lake, so make build works in the same terminal right after ./setup.sh (selfhost.setup).
+export PATH := $(HOME)/.elan/bin:$(PATH)
 
 # One make at a time in this checkout (clause selfhost.build.lock): every run takes an exclusive lock
 # on .cache/make.lock (LEANFM_MAKE_LOCK names another path) and waits for a run already holding it.
@@ -75,7 +77,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-structure-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check run-log-check
+check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check deps-check book-structure-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check run-log-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -306,6 +308,15 @@ proxy-check: go-toolchain
 .PHONY: keepalive-check
 keepalive-check: build
 	python3 -I scripts/keepalive_check.py
+
+# setup.sh and README.md's install table, generated from LeanFM/Deps.lean (selfhost.setup).
+.PHONY: setup-script deps-check
+setup-script:
+	lake env lean --run SetupScript.lean
+
+deps-check:
+	python3 -I scripts/deps_check.py --self-test
+	python3 -I scripts/deps_check.py
 
 # The book's paragraphs and subsections stay within their bounds (selfhost.book.structure).
 .PHONY: book-structure-check

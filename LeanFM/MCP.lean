@@ -14,6 +14,7 @@ import LeanFM.ProjectView
 import LeanFM.ModelCache
 import LeanFM.Reduce
 import LeanFM.Introduction
+import LeanFM.Deps
 
 namespace LeanFM.MCP
 
@@ -460,6 +461,25 @@ def serverInfoTool : Json :=
      "so the server should be restarted before trusting its answers about new code. No arguments. Read-only.")
     (schema [] [])
 
+/-- The setup script for a target (clause selfhost.setup): computed, never run. Listed on every host. -/
+def setupScriptTool : Json :=
+  tool "setup_script" "The script that installs what LeanFM needs"
+    ("The setup script LeanFM's checkout carries as ./setup.sh, generated from the one list of outside programs " ++
+     "(LeanFM/Deps.lean), and that list for a target: build (the default), book, check, videos, tla or all. The script " ++
+     "installs only what its tests find missing, with apt or Homebrew; with --check it only reports. This tool computes " ++
+     "the script and never runs it: run it on the machine that will build LeanFM. Read-only.")
+    (schema [("target", stringSchema "optional: build (default), book, check, videos, tla or all")] [])
+
+def setupScriptAnswer (args : Json) : Except String (String × Json) := do
+  let target := (args.getObjValAs? String "target").toOption.getD "build"
+  unless (LeanFM.Deps.targets ++ ["all"]).contains target do
+    throw s!"target {target} is not one of {", ".intercalate (LeanFM.Deps.targets ++ ["all"])}"
+  let text := s!"Save as setup.sh in a LeanFM checkout (it is already there as ./setup.sh) and run: bash setup.sh {target}\n" ++
+    s!"To see what is missing without installing: bash setup.sh {target} --check\n\n{LeanFM.Deps.script}"
+  return (text, Json.mkObj [("target", Json.str target), ("run", Json.str s!"./setup.sh {target}"),
+    ("check", Json.str s!"./setup.sh {target} --check"), ("dependencies", LeanFM.Deps.listing target),
+    ("script", Json.str LeanFM.Deps.script)])
+
 /-- Where a client starts (clause selfhost.mcp.introduction). Listed on every host. -/
 def introductionTool : Json :=
   tool "introduction" "Start here: what LeanFM is and what to call next"
@@ -470,8 +490,8 @@ def introductionTool : Json :=
 
 /-- The tools listed on this host. -/
 def listedTools : IO (Array Json) := do
-  if ← LeanFM.ServerLogs.enabled.get then return (((tools.push serverLogsTool).push projectViewTool).push serverInfoTool).push introductionTool
-  return tools.push introductionTool
+  if ← LeanFM.ServerLogs.enabled.get then return ((((tools.push serverLogsTool).push projectViewTool).push serverInfoTool).push introductionTool).push setupScriptTool
+  return (tools.push introductionTool).push setupScriptTool
 
 /-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
 `logicSummaryLimit` characters. The full answer is only in structuredContent. -/
@@ -784,6 +804,12 @@ def dispatchJsonCore (request : Json) (trace : Option Trace := none) : IO Respon
           let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
           pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
         | .error err => pure <| rpcError id (-32602) err
+      | .ok "setup_script" =>
+        match setupScriptAnswer ((field params "arguments").toOption.getD (Json.mkObj [])) with
+        | .ok (text, body) =>
+          let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
+          pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
+        | .error err => pure (ok id (logicResult "setup_script" (.error err)))
       | .ok "introduction" =>
         match ← LeanFM.Introduction.answer ((field params "arguments").toOption.getD (Json.mkObj [])) with
         | .ok (text, body) =>

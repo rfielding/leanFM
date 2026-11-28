@@ -5,16 +5,22 @@ Claude to it, and design a small system with it. The rest of the book explains w
 
 \section{Get LeanFM and start it}
 
-LeanFM needs \texttt{git}, elan (which installs the right Lean by itself), Node.js and Python;
-the README lists them. In a terminal:
+In a terminal, on Linux or macOS:
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
 git clone https://github.com/rfielding/leanFM.git
 cd leanFM
+./setup.sh
 make build
 make serve
 \end{lstlisting}
-\texttt{make serve} keeps running: it is the LeanFM server, answering on
-\texttt{http://127.0.0.1:8080}. Leave it open.
+\texttt{./setup.sh} installs only what is missing, and asks for your password once if it needs
+system packages. Run it again whenever you like: when nothing is missing it says so. The first
+\texttt{make build} takes a few minutes, while Lean builds LeanFM. \texttt{make serve} keeps
+running: it is the LeanFM server, answering on \texttt{http://127.0.0.1:8080}. Leave it open.
+
+To build this book as well, run \texttt{./setup.sh book} first; \texttt{./setup.sh all} sets up
+everything. With no \texttt{git} yet, install it first: \texttt{sudo apt install git} on Ubuntu,
+\texttt{xcode-select --install} on macOS.
 
 \section{Connect Claude}
 

@@ -96,28 +96,47 @@ The appendix is a reference for the protocol text, the formula syntax and the to
 
 ## Install
 
-LeanFM is developed on Linux (x86-64). What you need depends on what you run.
-
-| For | Needs |
-|---|---|
-| the MCP server, the tools, `make build` | `git`, [elan](https://github.com/leanprover/elan) (installs the Lean version in `lean-toolchain` by itself), Node.js 18+ and npm (the web UI bundle), Python 3 |
-| `make book` | a TeX Live with `pdflatex`, `bibtex`, `makeindex` and the packages in `book/main.tex` (TikZ, pgfplots, listings, TeX Gyre, cleveref…), Graphviz (`dot`), Python Playwright with Chromium (SVG to PDF) |
-| `make check` | all of the above, plus `bubblewrap` (`bwrap`, with user, PID and network namespaces allowed), `ripgrep`, and Go (`make go-toolchain` downloads a checksum-pinned Go into `.toolchains/`) |
-| the book pages in the session view | `poppler-utils` (`pdfinfo`, `pdftoppm`) |
-| videos (optional) | the project-local conda environment `video/.conda` with Manim, `ffmpeg`, and Piper; see `video/README.md` |
-
-On Debian or Ubuntu, roughly:
+LeanFM is developed on Linux (x86-64) and runs on macOS. From a fresh checkout:
 
 ```sh
-sudo apt install git curl nodejs npm python3 python3-pip graphviz poppler-utils bubblewrap ripgrep \
-  texlive-latex-extra texlive-pictures texlive-science texlive-fonts-recommended texlive-fonts-extra
-curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh
-python3 -m pip install --user playwright && python3 -m playwright install chromium
-git clone https://github.com/rfielding/leanFM.git && cd leanFM
-make go-toolchain   # only for make check
+git clone https://github.com/rfielding/leanFM.git
+cd leanFM
+./setup.sh        # installs only what is missing (asks for sudo for system packages)
+make build
+make serve
 ```
 
-(`texlive-full` also works and saves hunting for a missing package.)
+`./setup.sh book` adds what `make book` needs, `./setup.sh check` what `make check` needs, and
+`./setup.sh tla` what `make tla-check` needs, `./setup.sh all` everything; `--check` only reports what is missing. The script is generated from
+one list, `LeanFM/Deps.lean`, and the MCP tool `setup_script` answers the same script:
+
+<!-- deps: generated from LeanFM/Deps.lean by SetupScript.lean -->
+| Program | For | Needed by |
+|---|---|---|
+| git | the repository | build |
+| make | the make targets | build |
+| flock | one make at a time in a checkout | build |
+| curl | downloads (elan, Go) | build |
+| Python 3 with pip | the scripts and checks | build |
+| Node.js 18 or later and npm | the viewer's bundle (ui/) | build |
+| elan (Lean and Lake) | builds LeanFM; installs the Lean in lean-toolchain by itself | build |
+| TeX Live | the book's PDFs | book |
+| Graphviz | the book's graphs | book |
+| Poppler utilities | the book's pages in the viewer and the PDF checks | book |
+| Playwright with Chromium | SVG to PDF for the book, and the viewer checks | book |
+| Pillow and CairoSVG | the chat UI's image checks | check |
+| bubblewrap | the sandbox the checks run generated code in | check |
+| ripgrep | the checks' searches | check |
+| ss | finding a running server's port | check |
+| Google Chrome | the headless viewer in make run-log-check and the videos | check, videos |
+| Go (checksum-pinned, in .toolchains/) | the Go example's checks | check |
+| FFmpeg | the videos | videos |
+| Java | TLC, for the TLA+ comparison (make tla-check) | tla |
+| TLA+ tools (checksum-pinned, in .toolchains/) | the TLA+ comparison | tla |
+<!-- deps: end -->
+
+The videos also need the project-local conda environment `video/.conda` with Manim and Piper; see
+`video/README.md`.
 
 ## Run it
 
