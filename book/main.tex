@@ -323,6 +323,8 @@ piece of software, precisely enough that a machine can check it. Think of it as 
 checks claims about behaviour over time: what may happen next, what must happen eventually,
 and what must never happen.
 
+\section*{Two halves}
+
 It has two halves, and each has a plain job.
 \begin{itemize}
 \item A \textbf{protocol} says who sends what to whom, in what order, and where the
@@ -355,6 +357,8 @@ word & meaning \\
 Anything these words can say, Requirements Logic can say and check, and nothing more is
 needed: Chapter~\ref{ch:checker} writes the function and builds every word from it on one
 page.
+
+\section*{Two implications}
 
 \medskip
 \noindent\fcolorbox{leanblue}{diagramblue}{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{%
@@ -397,6 +401,7 @@ counterexample or a diagram. Nothing inside a double rule was typed by hand.
 refundRate  =>  1/3
 \end{lstlisting}
 
+\section*{One language for both}
 
 The book's central result joins the halves: a protocol \emph{is} a short list of claims,
 one per moment the conversation can be in, and a system obeys the claims exactly when it
@@ -410,9 +415,13 @@ models only what can be observed: the messages, as a log records them. A claim r
 message just delivered and whether the conversation may stop, and nothing else; no variable
 of any implementation appears in it. The state does not disappear: it moves into the
 observable protocol. Where the conversation is (what has been said, what may come next) is
-the state, and the messages show it, so a log is enough to know it. Observed behaviour is messier than one process's
+the state, and the messages show it, so a log is enough to know it.
+
+Observed behaviour is messier than one process's
 state, because conversations fork into child conversations that run at once and later join
-again, and the logic is built for exactly that (Chapter~\ref{ch:where}). It follows that systems with identical observable behaviour are indistinguishable: a claim
+again, and the logic is built for exactly that (Chapter~\ref{ch:where}).
+
+It follows that systems with identical observable behaviour are indistinguishable: a claim
 true of one is true of the other, however differently they are built (Chapter~\ref{ch:checker}).
 Identical here means the same messages \emph{and} the same choices still open at every
 moment, so a system that decides early is told apart from one that decides late, even when
@@ -423,6 +432,8 @@ specification to Zig, checked against the same claims. When both pass, nothing o
 can tell the two programs apart, though they share no code. In return, every
 claim is a requirement anyone can check against a real log, and how to build the system is
 left to whoever builds it.
+
+\section*{Evidence, LLMs and this book}
 
 The parallel with Lean goes further. A requirement is a statement; an implementation is
 evidence that it holds, such as a log that follows the protocol, or a test; and a

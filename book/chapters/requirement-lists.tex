@@ -4,7 +4,6 @@ A project has an actual list of requirements, and a similar list for each of its
 implementations. Both are lists of things that convert to CTL. An entry that does not
 convert yet says so, the way \texttt{sorry} does in a Lean proof: the file still reads,
 the entry is counted and warned about, and nothing pretends it holds.
-
 This chapter follows one small shop from requirements to an implementation. Both files
 are in \texttt{examples/orders}, and every verdict below is LeanFM's.
 
@@ -209,9 +208,13 @@ since only its end shows that no Answer will come. The guarantee is tested by a 
 withdrawal, and the answer says its trigger never happened. One run with a refund shows the
 possibility; a run without one only fails to show it.
 
+\subsection{LeanFM's own runs}
+
 {\sloppy A bare test name gives no run to judge, so it is sorry. Every requirement of LeanFM's own
 map stands on real runs of the current build. \texttt{make run-log-check} drives
-\texttt{leanfm-mcp} as any MCP client would, for McpCall. It then starts a server of its own and
+\texttt{leanfm-mcp} as any MCP client would, for McpCall.\par}
+
+{\sloppy It then starts a server of its own and
 opens LeanFM's viewer against it in a headless browser. The viewer loads a protocol file and asks
 for one the project does not list, and the conversation ends with Close, Done, Quit, Bye and
 ByeDone. That conversation's LeanFMMcp events, and the server's own ServerStart events, are the
@@ -233,17 +236,21 @@ Lean's kernel checks it. An implementation may name a theorem as evidence:
 \texttt{make selfhost-check} imports the theorems and asks the kernel which axioms each one rests
 on. It writes the answer to \texttt{proofs.json} beside the implementation, and the server only
 reads that file. A theorem that rests on \texttt{sorryAx} is failing, and one the file does not
-list is sorry. LeanFM's first such theorem is the laws of run judging's four values: \texttt{not}
+list is sorry.
+
+LeanFM's first such theorem is the laws of run judging's four values: \texttt{not}
 twice is the identity, \texttt{and} and \texttt{or} commute, De Morgan holds both ways, and one run
-never refutes a \textsf{possibly} or proves an \textsf{always}. Its only axiom is \texttt{propext}. Two more follow it. The path checks refuse an absolute path, a \texttt{..} part and a backslash,
+never refutes a \textsf{possibly} or proves an \textsf{always}. Its only axiom is \texttt{propext}.
+Two more follow it. The path checks refuse an absolute path, a \texttt{..} part and a backslash,
 for every input, not only for the inputs a test tries. And the implication rule from the Preface
 holds in every model: when the trigger can never happen, \texttt{(stronglyImplies a b)} is false at
 every state and \texttt{(always (implies a b))} is true at every state.
 
 The rule is proved of the checker LeanFM runs, too. The checker finds the reachable states, then
 labels each subformula once with the states where it holds. For every finite model, Lean proves that
-each fixpoint iteration ends at a fixpoint, and that all 14 operators are exact. The
-\textsf{possibly} words and \textsf{allUntil} are exact over paths that reach their target within
+each fixpoint iteration ends at a fixpoint, and that all 14 operators are exact.
+
+The \textsf{possibly} words and \textsf{allUntil} are exact over paths that reach their target within
 finitely many steps. \textsf{someAlways} and the \textsf{unless} words are exact as the largest set of
 states that can keep going. A deadlock ends a path. One step stays unproved: that exploring finds every
 successor. On every model of up to three states, the checker also agrees with the earlier depth-first

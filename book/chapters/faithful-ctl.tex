@@ -52,7 +52,6 @@ The first two lines rule out a server that never sends one of the answers (say, 
 that cannot say 404). The third rules out a server that sends anything else (say, a
 redirect, or nothing at all). Together they say: after the request, exactly these two
 answers are possible.
-
 That statement is about one moment. To make it a rule about the whole conversation,
 say \emph{when} it applies: ``at every moment at which the last message was GetImage
 and the conversation may not stop yet, those three lines hold.''
@@ -110,6 +109,8 @@ the loop never separates two states with the same moves, since they have the sam
 step into the same groups in every round.
 \end{proof}
 
+\subsection{Lookahead, or the bits a message would carry}
+
 The lookahead is how far ahead one must look to tell typestates apart. At $0$ the label
 alone decides: Images is like that (Figure~\ref{fig:images-ts}). The Retry loop of
 Chapter~\ref{ch:constructs} is not: a Busy after the first Ask and a Busy after the third
@@ -149,6 +150,8 @@ name also says, as many steps deep as needed, what may come next. Two facts make
 work:
 
 \begin{lemma}[Each state satisfies its name]\label{lem:own}
+\subsection{Names are exact}
+
 Every state of the protocol satisfies the name of its own typestate.
 \end{lemma}
 
@@ -185,6 +188,8 @@ With lookahead $0$ every name is a state term, so each \texttt{follows} is a
 \end{definition}
 
 \begin{theorem}[Faithfulness]\label{thm:faithful}
+\subsection{Faithful means the same moves}
+
 A system satisfies the faithful rules exactly when it has the protocol's moves at every
 state, no move more and no move less (it is bisimilar to the protocol).
 \end{theorem}
@@ -193,7 +198,6 @@ state, no move more and no move less (it is bisimilar to the protocol).
 If it has the same moves: the protocol satisfies its own rules (each state satisfies its
 name, and its next states are exactly the typestates its row lists), and a system with the
 same moves satisfies the same formulas (Browne's result, Section~\ref{thm:bcg}).
-
 If it satisfies the rules: pair each reachable state of the system with the protocol
 typestate whose name it satisfies, at most one by the exclusion of names (Section~\ref{lem:exclusive}); the start rule
 pairs the two starts. Paired states have the same label, which every name fixes. Each move

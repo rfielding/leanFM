@@ -29,7 +29,6 @@ conversation is, and that shows up only in the messages, the one just delivered 
 whether the conversation may stop. No variable, counter or field of any implementation
 appears in a formula. That keeps every formula a requirement: it says what may be seen on
 the wire, and leaves how to build it to whoever builds it.
-
 This chapter shows where the futures come from (a protocol), defines the whole language by
 one recursive function, and checks a formula by filling in a truth table, with a loop short
 enough to write in any language.
@@ -76,6 +75,8 @@ For Images that is four typestates:
 and LeanFM writes them out as a transition table, one rule per typestate, each a formula:
 
 \ToolOutput{generated/ctl-images-rules.tex}
+
+\subsection{Reading the table}
 
 Read it like code. \texttt{start}: the conversation begins before any message.
 \texttt{(transition start GetImage)}: from there, GetImage comes next and nothing else.
@@ -310,6 +311,8 @@ With B's inbox at size 0 the same protocol is realizable, since C cannot hand Y 
 takes it. The protocol text stays the specification: inbox sizes change this one answer and
 no other.
 
+\subsection{Faithful implementations}
+
 An implementation is \emph{faithful} when it allows exactly what the protocol allows at
 every state, no move more and no move less, so that the transition table holds of it.
 The textbook name for ``the same moves at every state'' is bisimilar:
@@ -380,6 +383,8 @@ simulated for the book (three days, \ToolOutput{generated/sig-counts.tex}; the w
 The order of the events is checked as for any protocol, and the devices are still running:
 
 \ToolOutput{generated/sig-conform.tex}
+
+\subsection{Claims with amounts}
 
 What we require of the cage, written as claims:
 

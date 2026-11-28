@@ -75,7 +75,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check run-log-check
+check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-structure-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check run-log-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -306,6 +306,12 @@ proxy-check: go-toolchain
 .PHONY: keepalive-check
 keepalive-check: build
 	python3 -I scripts/keepalive_check.py
+
+# The book's paragraphs and subsections stay within their bounds (selfhost.book.structure).
+.PHONY: book-structure-check
+book-structure-check:
+	python3 -I scripts/book_structure_check.py --self-test
+	python3 -I scripts/book_structure_check.py --strict
 
 # Every listing of LeanFM text in the book passes the checker as printed (selfhost.book.listings).
 .PHONY: book-listings-check

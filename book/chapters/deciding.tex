@@ -136,7 +136,6 @@ is the one-step shape. BoundedRide counts dispatch attempts and has lookahead $6
 GoServer is the only one whose typestates are not deterministic; it is also the only
 large one, and its size is the product of sessions that, checked one at a time, are
 small (Section~\ref{prop:sessions}).
-
 Measured through the MCP server on GoServer (39{,}497 checker nodes), on the author's
 machine: all 1{,}605 faithful rules in 0.73\,s; GoServer against itself, by
 refinement, in 1.42\,s; the mutant above in 1.42\,s; and each rule, sent back as an
