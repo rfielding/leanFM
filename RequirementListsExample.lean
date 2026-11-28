@@ -107,7 +107,7 @@ def main : IO Unit := do
   let (_, implsJ) ← listSummariesOf p exFiles (withClauses := false)
   let st := ((implsJ.getObjValD "implementations").getArr?.toOption.getD #[])[0]?.getD Json.null
   let n (k : String) := ((st.getObjValD "status").getObjValAs? Nat k).toOption.getD 0
-  write "req-orders-summary.tex" (listing s!"examples/orders: {rrows.size + irows.size} entries; {(rrows ++ irows).toList.filter (yes · "failing") |>.length} failing; {(rrows ++ irows).toList.filter (yes · "sorry") |>.length} use sorry\nrequirements: {(rrows.toList.filter (g · "kind" != "sorry")).length} convert to CTL, {(rrows.toList.filter (yes · "met")).length} met\nimplementation Go: {n "met"} met, {n "specified"} specified, {n "tested"} tested, {n "sorry"} sorry, {n "failing"} failing")
+  write "req-orders-summary.tex" (listing s!"examples/orders: {rrows.size + irows.size} entries; {(rrows ++ irows).toList.filter (yes · "failing") |>.length} failing; {(rrows ++ irows).toList.filter (yes · "sorry") |>.length} use sorry\nrequirements: {(rrows.toList.filter (g · "kind" != "sorry")).length} convert to CTL, {(rrows.toList.filter (yes · "met")).length} met\nimplementation Go: {n "proved"} proved, {n "tested"} tested, {n "sorry"} sorry, {n "failing"} failing")
   -- LeanFM's own lists, from its specification directory
   let spec := specProtocols p listed
   let (sfiles, serrs) ← readMapFiles p spec

@@ -708,7 +708,7 @@ def checkRow (p : Project) (protocols : Array String) (files : Array MapFile) (r
           | "conform" => do pure (checkConform imp.text rp (← readLog p (g "log")))
           | "test" => pure (testChecked (g "test"))
           | "sorry" => pure (sorryChecked (g "text"))
-          | _ => pure (failed s!"\"{key}\" is a requirement of {imp.path}: answer it with evidence (conform, test or sorry), not with CTL of its own")
+          | _ => pure (failed s!"\"{key}\" is a requirement of {imp.path}: answer it with evidence (conform or sorry), not with CTL of its own")
         return put ev [("evidence", true), ("status", Json.str (status rc (some ev)))]
       | none =>
         match kind, ptr with
@@ -724,6 +724,11 @@ def checkRow (p : Project) (protocols : Array String) (files : Array MapFile) (r
 def countWhere (rows : Array Json) (k : String) : Nat :=
   (rows.filter fun r => r.getObjValD k == Json.bool true).size
 
+/-- Rows by standing, strongest first (selfhost.requirements.standing). -/
+def standingCounts (rows : Array Json) : Json :=
+  Json.mkObj (LeanFM.RequirementCtl.standings.map fun k =>
+    (k, toJson (rows.filter fun r => (r.getObjValAs? String "standing").toOption == some k).size))
+
 /-- The overview's two sections: entries by kind, met, sorry and failing; per implementation, the
 computed status of every requirement it imports (one it does not name counts as sorry). -/
 def listSummariesOf (p : Project) (protocols : Array String) (withClauses : Bool := true) : IO (Json × Json) := do
@@ -733,7 +738,8 @@ def listSummariesOf (p : Project) (protocols : Array String) (withClauses : Bool
   let kindN (k : String) := (rows.filter fun r => (r.getObjValAs? String "kind").toOption == some k).size
   let reqs := Json.mkObj [("name", "requirements"), ("count", rows.size),
     ("kinds", Json.mkObj [("protocol", kindN "protocol"), ("formula", kindN "formula"), ("sorry", kindN "sorry")]),
-    ("met", countWhere checked "met"), ("sorry", countWhere checked "sorry"), ("failing", countWhere checked "failing")]
+    ("met", countWhere checked "met"), ("sorry", countWhere checked "sorry"), ("failing", countWhere checked "failing"),
+    ("standing", standingCounts checked)]
   let irows := implementationRows files
   let ichecked ← irows.mapM (checkRow p protocols files)
   let impls := files.toList.flatMap fun mf => mf.impls.map fun d =>
@@ -743,7 +749,7 @@ def listSummariesOf (p : Project) (protocols : Array String) (withClauses : Bool
     let st (k : String) := (named.filter (· == k)).size
     Json.mkObj [("impl", Json.str d.name), ("file", Json.str mf.path), ("of", Json.str d.of), ("hints", d.hints.length),
       ("failing", countWhere mine "failing"),
-      ("status", Json.mkObj [("met", st "met"), ("specified", st "specified"), ("tested", st "tested"),
+      ("status", Json.mkObj [("proved", st "proved"), ("tested", st "tested"),
         ("sorry", st "sorry" + (imported - named.size)), ("failing", st "failing")])]
   let implsJ := Json.mkObj [("name", "implementations"), ("count", irows.size), ("implementations", Json.arr impls.toArray),
     ("failing", countWhere ichecked "failing"), ("sorry", countWhere ichecked "sorry")]

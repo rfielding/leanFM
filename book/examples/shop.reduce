@@ -1,0 +1,8 @@
+; how much money did the shop make? (reduce_run over the shop's run)
+(define (amount e) (field e "amount"))
+(define revenue (sum (map amount (events "Pay"))))
+(define refunds (sum (map amount (events "Refund"))))
+(define refundRate (/ (count (events "Refund")) (count (events "Order"))))
+(- revenue refunds)
+refundRate
+(pie "where the money went" "$" (list (list "kept" (- revenue refunds)) (list "refunded" refunds)))

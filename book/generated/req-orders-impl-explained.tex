@@ -5,19 +5,19 @@ refines PlaceOrder by ShopImpl
 
 "Orders are placed as PlaceOrder says"
     evidence: the log examples/orders/logs/order-1.json conforms to the requirement's protocol
-    -> met
+    -> proved
 
 "Every order is answered"
     evidence: the test shop/order_test.go: TestEveryOrderAnswered
-    -> met
+    -> sorry
 
 "Every payment is charged to the bank"
     evidence: the log examples/orders/logs/order-1.json conforms to the requirement's protocol
-    -> met
+    -> proved
 
 "No receipt without a charge"
     sorry
-    -> specified
+    -> sorry
 
 "Stock is reserved before a quote"
     precedes(Reserved, Quote)

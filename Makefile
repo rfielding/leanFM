@@ -74,7 +74,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check
+check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check run-log-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -322,6 +322,10 @@ log-range-check:
 
 # Projects outside the checkout, named by --project (clause selfhost.project.external).
 .PHONY: external-project-check
+run-log-check:
+	lake build leanfm-mcp
+	python3 -I scripts/mcp_run_log.py
+
 external-project-check:
 	lake build leanfm-server leanfm-mcp
 	python3 -I scripts/external_project_check.py

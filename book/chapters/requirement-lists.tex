@@ -150,40 +150,70 @@ group does not stand in for the messages of a replication protocol, which the pr
 still get right. So PlaceOrder says nothing about islands, and the same requirements can be met
 on one machine or across three regions.
 
-\section{Status is computed}
+\section{Proved, tested, sorry, failing}
 
-Status follows from the two verdicts, so no one has to declare it:
+Every requirement has one of four standings, strongest first:
 
 \begin{center}
-\begin{tabular}{@{}llll@{}}
+\begin{tabular}{@{}lll@{}}
 \toprule
-requirement & evidence & status & the check \\
+standing & what shows it & the check \\
 \midrule
-converts and holds & passes & met & ok \\
-converts and holds & sorry or none & specified & warning \\
-sorry & passes & tested & warning \\
-sorry & sorry or none & sorry & warning \\
-fails & any & failing & error \\
-any & fails & failing & error \\
+proved & its CTL holds over the protocol (and the implementation's run conforms) & ok \\
+tested & a run of the implementation meets it, as one run can & ok \\
+sorry & nothing yet, or a run that does not show it yet & warning \\
+failing & disproved, or a run refutes it & error \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-A requirement \emph{fails} when its CTL does not hold or cannot be decided: a formula LeanFM
-disproves, or one naming a protocol or message that does not exist; a protocol with an issue
-\texttt{session\_check} reports. Evidence \emph{fails} when it contradicts the requirement: a
-log that does not conform, or a refinement that breaks a required formula. A test never fails
-here, since LeanFM does not run it; it can only make a requirement tested.
+A \emph{run} is a log that conforms to the requirement's protocol. Its roles need not be
+machines on a network: they can be components inside one binary. A unit test is a run of a
+protocol between the test and the component it tests. Because the requirement and the log
+format are the same for every implementation, the same test judges all of them, and an
+integration test ports from one implementation to the next.
+
+One run is one path through the system, so it proves what one path can. It can show that
+something is \emph{possible}: one run where it happens is enough. It can refute an
+\emph{always}: one run where it breaks is a counterexample. It cannot refute a
+\emph{possibly}, since another run may show it, and it cannot prove an \emph{always}, since
+another run may break it. So a run gives four values, not two:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+value & meaning \\
+\midrule
+true & the run shows it \\
+presumably true & it holds so far \\
+presumably false & not shown yet \\
+false & the run refutes it; the shortest refuting prefix is the counterexample \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\texttt{and} takes the weaker value, \texttt{or} the stronger, and \texttt{not} turns the order
+around. At the end of a session that is still running, \texttt{eventually} is presumably false,
+since the answer may still come, and \texttt{always} presumably true. A complete session is the
+whole run, so there they are definite. A requirement is tested when its value is true or
+presumably true, and failing when it is false.
+
+The two implications from the Preface behave as they should. A feature,
+\texttt{(stronglyImplies (on Call) (inevitably (on Answer)))}, is not tested by a run with no
+Call, because \texttt{possibly (on Call)} is not shown. A complete run with a Call and no Answer
+refutes it, and the counterexample is the run up to that Call. A guarantee,
+\texttt{(weaklyImplies (on OpenDoor) (on Password))}, is tested by a run in which the door never
+opens, and the answer says its trigger never happened.
+
+A bare test name gives no run to judge, so it is sorry. LeanFM's own first tested requirement
+is \emph{Every MCP request a server takes is answered}: \texttt{make run-log-check} drives
+\texttt{leanfm-mcp} as any MCP client would, writes one Call and one Answer per request to
+\texttt{LeanFM/LLMGenerated/runs/mcp-call.jsonl}, and the implementation names that log with
+\texttt{conform}. Its formula is also proved over McpCall, so it stands proved.
 
 A requirement an implementation does not name counts as sorry for it. The shop:
 
 \input{generated/req-orders-summary.tex}
-
-Evidence is only as strong as its kind. A conforming log is one of the protocol's runs, so
-every property of the form $\always\varphi$ proved of the protocol holds of it. A property
-$\inevitably\varphi$ or $\possibly\varphi$ also needs the guards of every choice to cover
-every value (Chapter~\ref{ch:where}). A test is evidence but not CTL, so a sorry
-requirement with a passing test is ``tested'', not ``met''.
 
 \section{LeanFM's own lists}
 

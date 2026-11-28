@@ -240,8 +240,8 @@ def projectViewTests : IO Unit := do
   let leanImpl := (((im.map (·.getObjValD "implementations")).map (·.getArr?.toOption.getD #[])).getD #[]).find? fun x =>
     (x.getObjValAs? String "impl").toOption == some "Lean"
   let st := leanImpl.map (·.getObjValD "status")
-  expect "the overview lists implementation Lean: 5 met, 2 specified, none failing, 3 hints"
-    (num st "met" == 5 && num st "specified" == 2 && num st "failing" == 0 && num leanImpl "hints" == 3)
+  expect "the overview lists implementation Lean: 1 proved (McpCall, by its run), 8 sorry, none failing, 3 hints"
+    (num st "proved" == 1 && num st "tested" == 0 && num st "sorry" == 8 && num st "failing" == 0 && num leanImpl "hints" == 3)
   let itemsOf (r : String) : IO (Array Json) := do
     pure ((((((← IO.ofExcept (Json.parse r)).getObjValD "result").getObjValD "structuredContent").getObjValD "page").getObjValD "items").getArr?.toOption.getD #[])
   let ritems ← itemsOf (← pvCall "{\"stage\":\"requirements\",\"section\":\"requirements\"}")
@@ -257,9 +257,10 @@ def projectViewTests : IO Unit := do
     (ritems.any fun it => field it "id" == "selfhost.revision" && field it "kind" == "sorry" && isTrue it "sorry" &&
       !isTrue it "met" && !isTrue it "failing" && field it "viewer" == "text")
   let iitems ← itemsOf (← pvCall "{\"stage\":\"requirements\",\"section\":\"implementations\"}")
-  expect "section implementations: test evidence met with status met, sorry evidence specified"
-    (iitems.any (fun it => field it "kind" == "test" && field it "status" == "met") &&
-     iitems.any (fun it => field it "kind" == "sorry" && field it "status" == "specified" && isTrue it "sorry"))
+  expect "section implementations: a conforming run that meets the McpCall formula stands proved; a bare test and sorry evidence are sorry"
+    (iitems.any (fun it => field it "kind" == "conform" && field it "status" == "proved" && field it "verdict" == "tested") &&
+     iitems.any (fun it => field it "kind" == "test" && field it "status" == "sorry" && isTrue it "sorry") &&
+     iitems.any (fun it => field it "kind" == "sorry" && field it "status" == "sorry" && isTrue it "sorry"))
   expect "the implementation's own CTL is proved, and its hints convert to true"
     (iitems.any (fun it => field it "id" == "Every read of the project root is answered" && field it "verdict" == "proved" && isTrue it "met") &&
      (iitems.filter (field · "kind" == "hint")).size == 3 && (iitems.filter (field · "kind" == "hint")).all (field · "verdict" == "true"))
@@ -296,8 +297,8 @@ def projectViewTests : IO Unit := do
     let go := ((exImpls.getObjValD "implementations").getArr?.toOption.getD #[])[0]?.getD Json.null
     let gst := go.getObjValD "status"
     let gn (k : String) := (gst.getObjValAs? Nat k).toOption.getD 99
-    expect "the orders example: implementation Go has 3 met (two by conforming logs), 1 specified, 2 sorry, none failing, its refinement kept"
-      (ex.size == 2 && gn "met" == 3 && gn "specified" == 1 && gn "sorry" == 2 && gn "failing" == 0 && (exImpls.getObjValAs? Nat "failing").toOption == some 0)
+    expect "the orders example: implementation Go has 2 proved (by conforming runs), 4 sorry (a bare test among them), none failing, its refinement kept"
+      (ex.size == 2 && gn "proved" == 2 && gn "tested" == 0 && gn "sorry" == 4 && gn "failing" == 0 && (exImpls.getObjValAs? Nat "failing").toOption == some 0)
     for f in ["/etc/passwd.leanfm", "LeanFM/../../x.leanfm", "LeanFM/LLMGenerated/SelfHosting.lean", "not/listed.leanfm"] do
       let r ← LeanFM.ProjectView.readProtocolText p protos f
       expect s!"an entry's file {f} outside the listing is never read" (match r with | .error _ => true | .ok _ => false)
@@ -430,6 +431,10 @@ def main : IO Unit := do
   assertContains "MCP check_signal answers the margin" sig.body "\"margin\":-1.1"
   let sigLog ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"tools/call\",\"params\":{\"name\":\"check_signal\",\"arguments\":{\"claim\":\"(always (below temp 26))\",\"serverLog\":\"devices\"}}}"
   assertContains "MCP check_signal refuses serverLog where server_logs is not served" sigLog.body "\"isError\":true"
+  assertContains "MCP lists reduce_run" toolsListed.body "\"name\":\"reduce_run\""
+  let red ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"tools/call\",\"params\":{\"name\":\"reduce_run\",\"arguments\":{\"program\":\"(/ (count (events \\\"Refund\\\")) (count (events)))\",\"events\":[{\"label\":\"Order\"},{\"label\":\"Order\"},{\"label\":\"Refund\"}]}}}"
+  assertContains "MCP reduce_run answers an exact value" red.body "\"exact\":\"1/3\""
+  assertContains "MCP reduce_run reports its ticks" red.body "\"tickBudget\":1000000"
   let reasm ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/call\",\"params\":{\"name\":\"check_reassembly\",\"arguments\":{\"signature\":\"AB\"}}}"
   assertContains "MCP check_reassembly finds an evasion with defaults" reasm.body "\"verdict\":\"disproved\""
   assertContains "MCP check_reassembly lists the segments" reasm.body "{\"data\":\"AB\",\"offset\":\"0\"}"

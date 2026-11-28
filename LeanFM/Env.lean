@@ -28,6 +28,7 @@ def registry : List Variable :=
   [ -- both servers
     { name := "LEANFM_LAUNCHED_NS", readers := [server, mcp], accepts := "the launch time, nanoseconds since the Unix epoch (date +%s%N)", default := "no measurement" }
   , { name := "LEANFM_LIMIT_CEILING", readers := [server, mcp], accepts := "a whole factor of at least 1 by which one call may raise its limits", default := "the built-in ceiling" }
+  , { name := "LEANFM_REDUCE_TICKS", readers := [server, mcp], accepts := "reduce_run's tick budget, a whole number of at least 1; no call can raise it", default := "1000000" }
   , { name := "LEANFM_MODEL_CACHE", readers := [server, mcp], accepts := "how many checker models to keep, a whole number", default := "16" }
   , { name := "LEANFM_KEEPALIVE_REQUESTS", readers := [server, mcp], accepts := "requests per connection, a whole number of at least 1", default := "100" }
   , { name := "LEANFM_KEEPALIVE_SECONDS", readers := [server, mcp], accepts := "idle seconds before a connection closes, a whole number", default := "30" }

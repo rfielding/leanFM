@@ -151,3 +151,29 @@ formula, classify a requirement as observable or not, check a trace of events wi
 causes, and say what an actor can derive from the messages it has seen.
 
 \input{generated/mcp-logic-examples.tex}
+
+\section{How much money did we make?}
+
+A chart is only as good as the numbers under it, so \texttt{reduce\_run} computes them with a
+program that runs, not a sentence that describes them. The program is a small Lisp. A
+\texttt{define} names a value or a function, and every other form is an output. Numbers are exact
+fractions, so a refund rate of one in three is \texttt{1/3}, and a zero is always found exactly.
+Over the shop's run:
+
+\lstinputlisting[language={}]{examples/shop.reduce}
+
+This gives 10 dollars kept, a refund rate of \texttt{1/3}, and a pie of where the money went. The
+same reducers can then be required of the data, as in ``refunds stay under 5\% of orders''.
+
+The language is sandboxed. It has a fixed list of names and no files, clock, network or
+\texttt{eval}. Each danger is named as a \emph{hazard} in
+\texttt{LeanFM/LLMGenerated/Hazards.lean}, with the control that bounds it and the test that shows
+the control works:
+\begin{itemize}
+\item a loop without end runs into a tick budget, which the operator sets and a caller cannot raise;
+\item deep recursion runs into a depth bound before it can exhaust the server's stack;
+\item repeated squaring runs into a bound of 4096 bits on numbers;
+\item a division by zero is refused.
+\end{itemize}
+Hazards with no control yet, such as a disk filled by logs, are listed as open rather than left
+unsaid.

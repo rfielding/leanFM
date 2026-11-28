@@ -1,0 +1,10 @@
+{"id": "c1", "session": "r1", "from": "Client", "to": "Server", "label": "Call"}
+{"id": "a1", "session": "r1", "from": "Server", "to": "Client", "label": "Answer", "cause": "c1"}
+{"id": "c2", "session": "r2", "from": "Client", "to": "Server", "label": "Call"}
+{"id": "a2", "session": "r2", "from": "Server", "to": "Client", "label": "Answer", "cause": "c2"}
+{"id": "c3", "session": "r3", "from": "Client", "to": "Server", "label": "Call"}
+{"id": "a3", "session": "r3", "from": "Server", "to": "Client", "label": "Answer", "cause": "c3"}
+{"id": "c4", "session": "r4", "from": "Client", "to": "Server", "label": "Call"}
+{"id": "a4", "session": "r4", "from": "Server", "to": "Client", "label": "Answer", "cause": "c4"}
+{"id": "c5", "session": "r5", "from": "Client", "to": "Server", "label": "Call"}
+{"id": "a5", "session": "r5", "from": "Server", "to": "Client", "label": "Answer", "cause": "c5"}

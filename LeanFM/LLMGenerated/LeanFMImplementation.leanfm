@@ -4,6 +4,7 @@ import LeanFM.Session.Syntax
 for each requirement of LeanFM.leanfm, CTL about what no agent observes (the server's reads of the
 project root), and hints for whoever writes the code. -/
 implementation Lean of LeanFM.LLMGenerated.LeanFM {
+  "Every MCP request a server takes is answered" => conform "LeanFM/LLMGenerated/runs/mcp-call.jsonl";
   "The MCP conversation follows LeanFMMcp" => test "LeanFM/MCPTests.lean: MCP lists canonical requirements";
   "No project view or tool before the server is initialized" => test "LeanFM/MCPTests.lean: initialize";
   "Every page the view asks for is shown or refused" => test "LeanFM/MCPTests.lean: project_view pages";

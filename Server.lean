@@ -658,6 +658,7 @@ def main (args : List String) : IO UInt32 := do
   let port ← configuredPort
   -- checked before serving, so a bad value stops the server now (selfhost.env.startup)
   LeanFM.CallLimits.configureFromEnv
+  LeanFM.Reduce.configureFromEnv
   LeanFM.ModelCache.configureFromEnv
   LeanFM.KeepAlive.configureFromEnv
   try LeanFM.ProjectRoots.configure projects catch e =>

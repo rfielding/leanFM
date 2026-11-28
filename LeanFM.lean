@@ -6,6 +6,8 @@ import LeanFM.Library
 import LeanFM.LogIndexTests
 -- claims over measured values (clause selfhost.mcp.logic.signal)
 import LeanFM.SignalTests
+import LeanFM.RunCheckTests
+import LeanFM.ReduceTests
 -- the session-type library and its tests (clauses selfhost.session.*)
 -- the philosophy calculator example and its tests
 import LeanFM.Philosophy.ExistenceTests

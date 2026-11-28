@@ -356,7 +356,7 @@ def main (args : List String) : IO UInt32 := do
   -- every environment variable is checked before serving, so a bad one stops the server now, not
   -- later in its logs (selfhost.env.startup); HTTP's own variables are checked by HostConfig.fromEnv
   -- first: how long launch took to reach main (selfhost.env.launch)
-  try LeanFM.Launch.read; LeanFM.CallLimits.configureFromEnv; LeanFM.ModelCache.configureFromEnv; LeanFM.KeepAlive.configureFromEnv catch e =>
+  try LeanFM.Launch.read; LeanFM.CallLimits.configureFromEnv; LeanFM.Reduce.configureFromEnv; LeanFM.ModelCache.configureFromEnv; LeanFM.KeepAlive.configureFromEnv catch e =>
     IO.eprintln s!"leanfm-mcp: {e}"
     return 2
   -- projects outside the checkout: a relative DIR is taken from where the server started

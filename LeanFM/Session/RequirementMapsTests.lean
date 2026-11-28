@@ -56,13 +56,6 @@ def two := order ++ "\nprotocol Ping (A, B) { M from A to B; }\nrequirements {\n
 #guard let c := checkPointer two (.sorry_ "why"); c.usesSorry && !c.met && !c.failing
 #guard (checkPointer two (.protocol "Nope")).failing
 #guard let h := hintChecked; !h.met && !h.failing && !h.usesSorry && h.verdict == "true"
--- the computed status
-#guard status (checkPointer two (.protocol "PlaceOrder")) (some (testChecked "t")) == "met"
-#guard status (checkPointer two (.protocol "PlaceOrder")) (some (sorryChecked "")) == "specified"
-#guard status (checkPointer two (.protocol "PlaceOrder")) none == "specified"
-#guard status (sorryChecked "") (some (testChecked "t")) == "tested"
-#guard status (sorryChecked "") none == "sorry"
-#guard status (checkPointer two (.formula "PlaceOrder" "(AG (not (on Pay)))")) (some (testChecked "t")) == "failing"
 -- conform: a run that keeps the protocol meets it, one that breaks a where clause fails
 def ev (i l s d : String) (c : Option String) (body : List (String × Json)) : Json :=
   Json.mkObj ([("id", Json.str i), ("label", Json.str l), ("from", Json.str s), ("to", Json.str d), ("body", Json.mkObj body)] ++
@@ -74,6 +67,26 @@ def run (amount : Nat) : Json := Json.arr #[ev "o1" "CreateOrder" "Client" "Shop
 #guard (checkConform two (.protocol "PlaceOrder") (.ok (run 10))).met
 #guard (checkConform two (.protocol "PlaceOrder") (.ok (run 12))).failing
 #guard (checkConform two (.sorry_ "") (.ok (run 10))).failing
+-- a formula requirement judged on the run: tested, pending (not shown yet) or refuted with its counterexample
+#guard let c := checkConform two (.formula "PlaceOrder" "(stronglyImplies (on Pay) (inevitably (on Receipt)))") (.ok (run 10))
+  c.met && c.verdict == "tested" && c.standing == "tested"
+#guard let c := checkConform two (.formula "PlaceOrder" "(possibly (on Refund))") (.ok (run 10))
+  !c.met && !c.failing && c.verdict == "pending"
+#guard let c := checkConform two (.formula "PlaceOrder" "(never (on Charge))") (.ok (run 10))
+  c.failing && c.verdict == "refuted" && (c.reading.splitOn "counterexample: the first 4 events").length > 1 && (c.reading.splitOn "c1").length > 1
+#guard let c := checkConform two (.formula "PlaceOrder" "(always (at s1))") (.ok (run 10))
+  c.usesSorry && c.verdict == "unjudged"
+
+-- the computed standing: proved, tested, sorry, failing; a bare test name is sorry
+#guard status (checkPointer two (.protocol "PlaceOrder")) (some (checkConform two (.protocol "PlaceOrder") (.ok (run 10)))) == "proved"
+#guard status (checkPointer two (.protocol "PlaceOrder")) (some (testChecked "t")) == "sorry"
+#guard (testChecked "t").usesSorry && !(testChecked "t").met
+#guard status (checkPointer two (.protocol "PlaceOrder")) none == "sorry"
+#guard status (sorryChecked "") (some (checkConform two (.protocol "PlaceOrder") (.ok (run 10)))) == "tested"
+#guard status (sorryChecked "") none == "sorry"
+#guard status (checkPointer two (.formula "PlaceOrder" "(AG (not (on Pay)))")) (some (sorryChecked "")) == "failing"
+#guard (checkPointer two (.protocol "PlaceOrder")).standing == "proved"
+#guard (sorryChecked "").standing == "sorry"
 
 end LeanFM.Session.RequirementMapsTests
 

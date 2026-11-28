@@ -12,6 +12,7 @@ import LeanFM.Launch
 import LeanFM.ServerInfo
 import LeanFM.ProjectView
 import LeanFM.ModelCache
+import LeanFM.Reduce
 
 namespace LeanFM.MCP
 
@@ -237,6 +238,16 @@ def toolDefinitions : Array Json := #[
       ("lastLines", Json.mkObj [("type", "integer"), ("minimum", 1), ("maximum", 100000), ("description", Json.str "with serverLog, instead of fromLine and lineCount: the last N lines")]),
       ("from", Json.mkObj [("type", "number"), ("description", Json.str "a time in seconds: check the claim from the first sample at or after it (every field it reads needs a reading by then); needed when the claim's branches would otherwise start at different samples")]),
       ("theme", stringSchema "light or dark: also draw the chart as an SVG")] ["claim"]),
+  tool "reduce_run" "Compute numbers and charts from a run"
+    "Compute descriptive numbers and charts (pie, xy, histogram) from one recorded run with a small sandboxed Lisp, so a chart's reducer is a program that runs. (define name expr) and (define (f x ...) body) name things; lambda, if, let, and, or; numbers are exact rationals (1/3 stays 1/3, 0.25 is 1/4, and a zero is found exactly). Names: + - * / = < <= > >= not zero? list cons first rest empty? length append map filter fold sum count min max countBy sumBy field has? label time cause events, and the charts (pie title unit pairs), (xy title xunit yunit points), (histogram title unit width values). (events) is the run in order, (events \"Pay\") the Pay events; (field e \"amount\"), (time e) in seconds, (cause e) the event e answers. Every top-level form that is not a define is an output. Pure: no files, clock, network or eval. A division by zero, a name outside the list, a program past its tick budget (set by the operator, not the call), 10000 nested calls or a number over 4096 bits is refused, naming it. Example: (define (amount e) (field e \"amount\")) (pie \"money\" \"$\" (sumBy label amount (events \"Pay\")))"
+    (schema [("program", stringSchema "the program: defines and output forms"),
+      ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")]), ("description", "[{id, label, t (seconds) or ts (nanoseconds), cause?, body?}] in order")]),
+      ("log", stringSchema "event lines instead of events: each {\"type\":\"leanFM\",...} line"),
+      ("serverLog", stringSchema "instead of events or log: the name of a log server_logs lists, read on the server"),
+      ("fromLine", Json.mkObj [("type", "integer"), ("minimum", 1), ("description", Json.str "with serverLog: the first line to read (default 1)")]),
+      ("lineCount", Json.mkObj [("type", "integer"), ("minimum", 1), ("maximum", 100000), ("description", Json.str "with serverLog: how many lines to read")]),
+      ("lastLines", Json.mkObj [("type", "integer"), ("minimum", 1), ("maximum", 100000), ("description", Json.str "with serverLog, instead of fromLine and lineCount: the last N lines")]),
+      ("theme", stringSchema "light or dark: also draw each chart as an SVG")] ["program"]),
   tool "check_reassembly" "Find stream-reassembly evasions"
     "A defender scans a TCP stream for a signature, and the host behind it reassembles the same stream; the attacker chooses every segment (any offset and length, the signature's bytes or others, repeated with different bytes). Each side keeps the first or the last bytes of an overlap. Returns check_ctl's verdict over every segmentation and, for an evasion, the segments that make it. Defaults: signature EVIL, box first, host last, mode blocking (an IPS resets the stream on a match; passive is an IDS that alerts), formula never claimed delivered(sig) in blocking mode and never (delivered and not alerted) in passive mode. Claims for a formula: alerted(sig), delivered(sig)."
     (schema [("signature", stringSchema "1 to 4 characters, no ."),
@@ -504,6 +515,7 @@ def toolResult (name : String) (arguments : Json := Json.mkObj []) : Except Stri
        LeanFM.LLMGenerated.Implementation.validationReport)
   | "requirements_interrogation" => .ok <| textContent LeanFM.requirementsInterrogationChecklist
   | "code_generation_prompt" => .ok <| textContent LeanFM.codeGenerationSystemPrompt
+  | "reduce_run" => .ok (logicResult name (LeanFM.Reduce.check arguments))
   | _ => .error s!"unknown tool: {name}"
 
 /-- session_ctl with the model token (selfhost.mcp.model-token): a token held for exactly this call's
@@ -799,6 +811,12 @@ def dispatchJsonCore (request : Json) (trace : Option Trace := none) : IO Respon
               else if name == "check_signal" then do
                 match ← LeanFM.ServerLogs.logArgs args with
                 | .ok args => pure (toolResult name args)
+                | .error e => pure (.ok (logicResult name (.error e)))
+              -- reduce_run runs under the operator's tick budget and may name a server log (selfhost.mcp.logic.reduce)
+              else if name == "reduce_run" then do
+                let budget ← LeanFM.Reduce.tickBudget.get
+                match ← LeanFM.ServerLogs.logArgs args with
+                | .ok args => pure (.ok (logicResult name (LeanFM.Reduce.check args budget)))
                 | .error e => pure (.ok (logicResult name (.error e)))
               else pure (toolResult name args)
             pure (r.map (withLimitsReport applied))

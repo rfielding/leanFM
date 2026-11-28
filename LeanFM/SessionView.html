@@ -3219,12 +3219,12 @@ function requirementsStage(body) {
     const rq = body.sections.find((x) => x && x.name === "requirements");
     if (rq && rq.kinds) {
       const k = rq.kinds;
-      row.appendChild(el("span", "meta", ` requirements: ${num(k.protocol)} protocol, ${num(k.formula)} formula (${num(rq.met)} met, ${num(rq.failing)} failing), ${num(k.sorry)} use sorry`));
+      row.appendChild(el("span", "meta", ` requirements: ${num(k.protocol)} protocol, ${num(k.formula)} formula (${num(rq.met)} met, ${num(rq.failing)} failing), ${num(k.sorry)} use sorry` + (rq.standing ? ` · ${num(rq.standing.proved)} proved, ${num(rq.standing.tested)} tested, ${num(rq.standing.sorry)} sorry, ${num(rq.standing.failing)} failing` : "")));
     }
     const im = body.sections.find((x) => x && x.name === "implementations");
     if (im && Array.isArray(im.implementations)) for (const i of im.implementations.slice(0, MAX_ITEMS)) {
       const st = i.status || {};
-      row.appendChild(el("span", "meta", ` · implementation ${i.impl}: ${num(st.met)} met, ${num(st.specified)} specified, ${num(st.tested)} tested, ${num(st.sorry)} sorry, ${num(st.failing)} failing, ${num(i.hints)} hints`));
+      row.appendChild(el("span", "meta", ` · implementation ${i.impl}: ${num(st.proved)} proved, ${num(st.tested)} tested, ${num(st.sorry)} sorry, ${num(st.failing)} failing, ${num(i.hints)} hints`));
     }
     parts.push(panel("Derived from " + String(body.file || "the requirements") + ": the requirement and implementation lists, tasks with their state machines and CTL, clauses, every protocol", row));
     return parts;
@@ -3266,8 +3266,9 @@ function requirementsStage(body) {
       const sm = el("summary", "", `${who}${kind} · ${r.id}` + (r.file ? ` · ${r.file}` : "") + (r.declared ? ` [${r.declared}]` : ""));
       const label = r.failing === true ? "failing: " + String(r.verdict || "")
         : typeof r.status === "string" ? r.status
+        : typeof r.standing === "string" ? r.standing
         : r.met === true ? "met" : r.sorry === true ? "sorry" : String(r.verdict || "");
-      const cls = r.failing === true ? "issues" : (r.met === true || r.status === "met") ? "ok" : "";
+      const cls = r.failing === true ? "issues" : (r.met === true || r.status === "proved" || r.status === "tested") ? "ok" : "";
       sm.appendChild(el("span", "badge " + cls, label));
       d.appendChild(sm);
       if (r.ctl && typeof r.ctl === "object") {

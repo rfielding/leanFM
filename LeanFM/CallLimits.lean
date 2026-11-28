@@ -45,7 +45,8 @@ def registry : List Limit :=
   , ⟨"requestBytes", 262144, "bytes", "one HTTP request body to /mcp; raise it with the LeanFM-Limits header, which arrives before the body"⟩
   , ⟨"signalSamples", 100000, "samples", "samples one check_signal reads"⟩
   , ⟨"signalWords", 256, "words", "words of one check_signal claim"⟩
-  , ⟨"signalPoints", 2000, "points", "points of each series check_signal returns or draws"⟩ ]
+  , ⟨"signalPoints", 2000, "points", "points of each series check_signal returns or draws"⟩
+  , ⟨"reduceEvents", 100000, "events", "events of the run one reduce_run reads"⟩ ]
 
 def names : List String := registry.map (·.name)
 
