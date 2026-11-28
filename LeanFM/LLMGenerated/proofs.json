@@ -8,6 +8,10 @@
   "axioms": ["propext", "Classical.choice", "Quot.sound"]},
  "LeanFM.RunCheck.Proofs.standing_laws":
  {"sorryFree": true, "exists": true, "axioms": ["propext"]},
+ "LeanFM.ReduceProofs.submitted_programs_closed":
+ {"sorryFree": true,
+  "exists": true,
+  "axioms": ["propext", "Classical.choice", "Quot.sound"]},
  "LeanFM.PathProofs.paths_stay_inside":
  {"sorryFree": true,
   "exists": true,

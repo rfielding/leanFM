@@ -40,7 +40,7 @@ def hazards : List Hazard :=
       hazard := "a submitted program reaches the file system, the network, the clock or the Lean runtime"
       never := "submitted logic runs as code (required proof Submitted logic never runs as code)"
       control := "Reduce is an interpreter over its own value type: names resolve only to a fixed primitive list, the program's defines and parameters; there is no eval, no IO and no string-to-code"
-      test := "LeanFM/ReduceTests.lean: an unknown name (such as readFile or eval) is refused before it runs" }
+      test := "LeanFM/ReduceTests.lean: an unknown name (such as readFile or eval) is refused before it runs; proved for every program: LeanFM.ReduceProofs.submitted_programs_closed" }
   , { id := "reduce.input-size", status := "mitigated"
       hazard := "a run too large to hold is sent or named"
       never := "a run over reduceEvents events, or arguments over argumentBytes, is read"

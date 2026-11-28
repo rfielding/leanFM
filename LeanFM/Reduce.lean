@@ -176,6 +176,57 @@ def primitives : List String :=
 
 def special : List String := ["define", "lambda", "if", "let", "and", "or"]
 
+/-! ## Names
+
+A program's names are checked before it runs (unbound), and resolved while it runs (resolve); both
+are total, and LeanFM/ReduceProofs.lean proves what they let through. -/
+
+/-- A name the check accepts where `bound` are the names in scope. -/
+def allowed (defs bound : List String) (a : String) : Bool :=
+  (parseNum a).isSome || a == "true" || a == "false" || bound.contains a || defs.contains a || primitives.contains a
+
+def paramNames (ps : List Sx) : List String := ps.filterMap fun | .atom p => some p | _ => none
+
+mutual
+/-- The first name a form uses that is not a number, true or false, bound, a define, a primitive or
+a special form, checked over the whole program before anything runs, so a name outside the list never
+reaches evaluation (decision logic-reduce). -/
+def unbound (defs bound : List String) : Sx → Option String
+  | .str _ => none
+  | .atom a => if allowed defs bound a then none else some a
+  | .list [.atom "lambda", .list ps, body] => unbound defs (paramNames ps ++ bound) body
+  | .list [.atom "let", .list binds, body] => unboundLet defs bound binds body
+  | .list (.atom s :: rest) =>
+    if special.contains s || allowed defs bound s then unboundAll defs bound rest else some s
+  | .list xs => unboundAll defs bound xs
+termination_by x => sizeOf x
+def unboundAll (defs bound : List String) : List Sx → Option String
+  | [] => none
+  | x :: xs => (unbound defs bound x).orElse fun _ => unboundAll defs bound xs
+termination_by xs => sizeOf xs
+/-- A let's bindings in order, each name in scope for the ones after it and the body; a binding that
+is not (name expr) is checked as a form. -/
+def unboundLet (defs bound : List String) : List Sx → Sx → Option String
+  | [], body => unbound defs bound body
+  | .list [.atom n, e] :: bs, body => (unbound defs bound e).orElse fun _ => unboundLet defs (n :: bound) bs body
+  | b :: bs, body => (unbound defs bound b).orElse fun _ => unboundLet defs bound bs body
+termination_by bs body => sizeOf bs + sizeOf body
+end
+
+/-- What a name means while the program runs: a number, true or false, a local, a define, or a
+primitive, and nothing else. -/
+def resolve (scope : List (String × Value)) (globals : Std.HashMap String Value) (a : String) : Option Value :=
+  match parseNum a with
+  | some q => some (.num q)
+  | none =>
+    if a == "true" then some (.bool true)
+    else if a == "false" then some (.bool false)
+    else match scope.lookup a with
+      | some v => some v
+      | none => match globals.get? a with
+        | some v => some v
+        | none => if primitives.contains a then some (.prim a) else none
+
 /-! ## Evaluation -/
 
 structure St where
@@ -244,13 +295,9 @@ partial def eval (run : Array Ev) (scope : List (String × Value)) (d : Nat) (x 
   match x with
   | .str s => pure (.str s)
   | .atom a =>
-    if let some q := parseNum a then return .num q
-    if a == "true" then return .bool true
-    if a == "false" then return .bool false
-    if let some v := scope.lookup a then return v
-    if let some v := (← get).globals.get? a then return v
-    if primitives.contains a then return .prim a
-    throw s!"{a} is not defined here"
+    match resolve scope (← get).globals a with
+    | some v => return v
+    | none => throw s!"{a} is not defined here"
   | .list [] => pure (.list [])
   | .list (.atom "if" :: rest) =>
     match rest with
@@ -402,27 +449,6 @@ partial def prim (run : Array Ev) (p : String) (args : List Value) (d : Nat) (at
       ("width", numJson bw), ("data", data), ("cut", cut)]))
   | p, args => throw s!"{w}: {p} does not take {args.length} argument{if args.length == 1 then "" else "s"} of these kinds"
 end
-
-/-- Every name a form uses must be bound, a define, a primitive or a special form: checked over the
-whole program before anything runs, so a name outside the list never reaches evaluation. -/
-partial def unbound (defs : List String) (bound : List String) : Sx → Option String
-  | .str _ => none
-  | .atom a => if (parseNum a).isSome || a == "true" || a == "false" || bound.contains a || defs.contains a || primitives.contains a then none else some a
-  | .list [.atom "lambda", .list ps, body] =>
-    unbound defs (ps.filterMap (fun | .atom p => some p | _ => none) ++ bound) body
-  | .list [.atom "let", .list binds, body] => Id.run do
-    let mut b := bound
-    for x in binds do
-      match x with
-      | .list [.atom n, e] =>
-        if let some u := unbound defs b e then return some u
-        b := n :: b
-      | _ => pure ()
-    return unbound defs b body
-  | .list (.atom s :: rest) =>
-    if special.contains s then rest.findSome? (unbound defs bound)
-    else (unbound defs bound (.atom s)).orElse fun _ => rest.findSome? (unbound defs bound)
-  | .list xs => xs.findSome? (unbound defs bound)
 
 /-- The value of an output as JSON. -/
 partial def render : Value → Json

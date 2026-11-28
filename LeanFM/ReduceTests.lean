@@ -70,6 +70,9 @@ def bookExample := include_str "../book/examples/shop.reduce"
 -- names outside the list are refused before anything runs
 #guard refused "(readFile \"/etc/passwd\")" "readFile is not a primitive"
 #guard refused "(eval \"(+ 1 2)\")" "eval is not a primitive"
+-- a let binding that is not (name expr) is checked as a form, so its names are checked too
+#guard refused "(let ((readFile)) 1)" "readFile is not a primitive"
+#guard refused "(lambda (x) (system x))" "system is not a primitive"
 #guard refused "(define (sum xs) 0)\n1" "is a primitive and cannot be redefined"
 -- the bounds, each named
 -- a loop that stays shallow but never ends runs into the tick budget; a deep one into the depth bound
