@@ -290,14 +290,14 @@ def projectViewTests : IO Unit := do
   let kinds := (rq.map (·.getObjValD "kinds"))
   -- the formulas are counted from LeanFM.leanfm's requirements block, so adding one needs no new number here
   let nFormulas := (((← IO.FS.readFile "LeanFM/LLMGenerated/LeanFM.leanfm").splitOn "requirements {").getLast!.splitOn "⊨").length - 1
-  expect s!"the overview counts LeanFM's requirements: 1 protocol, {nFormulas} formulas (its requirements block), the clauses and eight entries Lean theorems answer as sorry, all {nFormulas + 1} met, none failing"
-    (num kinds "protocol" == 1 && num kinds "formula" == nFormulas && num kinds "sorry" == nClauses + 8 && num rq "met" == nFormulas + 1 && num rq "failing" == 0)
+  expect s!"the overview counts LeanFM's requirements: 1 protocol, {nFormulas} formulas (its requirements block), the clauses and nine entries Lean answers as sorry, all {nFormulas + 1} met, none failing"
+    (num kinds "protocol" == 1 && num kinds "formula" == nFormulas && num kinds "sorry" == nClauses + 9 && num rq "met" == nFormulas + 1 && num rq "failing" == 0)
   let im := sec "implementations"
   let leanImpl := (((im.map (·.getObjValD "implementations")).map (·.getArr?.toOption.getD #[])).getD #[]).find? fun x =>
     (x.getObjValAs? String "impl").toOption == some "Lean"
   let st := leanImpl.map (·.getObjValD "status")
-  expect "the overview lists implementation Lean: all 17 proved, nine by real runs and eight by Lean theorems, none sorry, none failing, 3 hints"
-    (num st "proved" == 17 && num st "tested" == 0 && num st "sorry" == 0 && num st "failing" == 0 && num leanImpl "hints" == 3)
+  expect "the overview lists implementation Lean: all 18 proved, nine by real runs and nine by Lean (theorems and a purity walk), none sorry, none failing, 3 hints"
+    (num st "proved" == 18 && num st "tested" == 0 && num st "sorry" == 0 && num st "failing" == 0 && num leanImpl "hints" == 3)
   let itemsOf (r : String) : IO (Array Json) := do
     pure ((((((← IO.ofExcept (Json.parse r)).getObjValD "result").getObjValD "structuredContent").getObjValD "page").getObjValD "items").getArr?.toOption.getD #[])
   let ritems ← itemsOf (← pvCall "{\"stage\":\"requirements\",\"section\":\"requirements\"}")

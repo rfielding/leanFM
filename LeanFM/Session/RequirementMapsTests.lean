@@ -98,6 +98,13 @@ def proofs : Json := Json.mkObj [
 #guard (proofChecked "Gone" (some proofs)).failing
 #guard let c := proofChecked "Unlisted" (some proofs); c.usesSorry && !c.met && !c.failing
 #guard (proofChecked "Good" none).usesSorry
+-- pure evidence: a walk with no problem is proved and names its exceptions; a problem is failing
+def purity : Lean.Json := Lean.Json.mkObj
+  [("pure A.f", Lean.Json.mkObj [("exists", true), ("reached", (12 : Nat)), ("problems", Lean.Json.arr #[]), ("exceptions", Lean.Json.arr #["X: a cache"])]),
+   ("pure A.g", Lean.Json.mkObj [("exists", true), ("reached", (3 : Nat)), ("problems", Lean.Json.arr #["A.h has IO in its type"]), ("exceptions", Lean.Json.arr #[])])]
+#guard let c := pureChecked "A.f" (some purity); c.met && c.standing == "proved" && (c.reading.splitOn "X: a cache").length > 1
+#guard let c := pureChecked "A.g" (some purity); c.failing && (c.reading.splitOn "has IO in its type").length > 1
+#guard (pureChecked "A.k" (some purity)).usesSorry
 #guard status (sorryChecked "") (some (proofChecked "Good" (some proofs))) == "proved"
 #guard status (sorryChecked "") (some (proofChecked "Bad" (some proofs))) == "failing"
 #guard match Text.readMaps "import LeanFM.Session.Syntax\nimplementation Go of Orders.Requirements {\n  \"pay\" => proof \"Orders.payProof\";\n}\n" with

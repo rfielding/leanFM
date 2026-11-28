@@ -20,6 +20,7 @@ implementation Lean of LeanFM.LLMGenerated.LeanFM {
   "selfhost.mcp.limits" => proof "LeanFM.LimitProofs.validate_within_ceiling";
   "SettingsChecked" => proof "LeanFM.StartupProofs.startup_checked";
   "SecretsUnwritten" => proof "LeanFM.StartupProofs.secret_never_written";
+  "SubmittedLogicInert" => pure "LeanFM.Logic.run LeanFM.Reduce.check";
   "ReduceNamesClosed" => proof "LeanFM.ReduceProofs.submitted_programs_closed";
   "CheckerProved" => proof "LeanFM.CheckerProofs.holds_and_checker_proved";
   hint "Implement in Lean 4; the server is one executable built with lake";

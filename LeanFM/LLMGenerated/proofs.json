@@ -1,4 +1,10 @@
-{"LeanFM.StartupProofs.startup_checked":
+{"pure LeanFM.Logic.run LeanFM.Reduce.check":
+ {"reached": 1535,
+  "problems": [],
+  "exists": true,
+  "exceptions":
+  ["LeanFM.Logic.Dag.addUnsafe: a cache keyed by pointer address in front of Dag.add, whose own definition (addRef) builds the same DAG; it reads no file, clock or network and changes only how much work is repeated"]},
+ "LeanFM.StartupProofs.startup_checked":
  {"sorryFree": true,
   "exists": true,
   "axioms": ["propext", "Classical.choice", "Quot.sound"]},

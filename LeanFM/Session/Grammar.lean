@@ -311,7 +311,7 @@ def requirementsBody : Parser := node `LeanFM.Session.Grammar.requirementsBody
 
 /-- Evidence for an imported requirement, or a pointer for the implementation's own CTL. -/
 def evidence : Parser := node `LeanFM.Session.Grammar.evidence
-  ((W "conform" >> strLit) <|> (W "test" >> strLit) <|> (W "proof" >> strLit) <|> reqPointer)
+  ((W "conform" >> strLit) <|> (W "test" >> strLit) <|> (W "proof" >> strLit) <|> (W "pure" >> strLit) <|> reqPointer)
 /-- One line of an implementation: `refines P by Q;`, `hint "text";` or `"name" => evidence;`. -/
 def implItem : Parser := node `LeanFM.Session.Grammar.implItem
   ((W "refines" >> ident >> W "by" >> ident >> ";") <|> (W "hint" >> strLit >> ";") <|> (strLit >> " => " >> evidence >> ";"))

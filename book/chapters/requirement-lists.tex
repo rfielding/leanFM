@@ -264,11 +264,22 @@ false only for \texttt{0} or \texttt{false}, and refuses every other value. A se
 Stating the switch theorem found a bug: an empty value was read as off, even when the default was
 on. Now an empty value takes the default.
 
+\subsection{Submitted logic never runs as code}
+
 Submitted logic never runs as code, and for \texttt{reduce\_run} programs that is proved too. Before
 a program runs, every name in it must be a number, \texttt{true} or \texttt{false}, a primitive, one
 of its own defines, or a name it binds itself. While it runs, a name means one of those and nothing
 else. No name reaches a file, the clock, the network or Lean. The proof found a gap: a malformed
 \texttt{let} binding skipped the check, though the evaluator refused it before using it.
+
+The rest of that guarantee comes from Lean's types. A function with no IO in its type cannot read a
+file, the clock or the network, unless its code takes one of Lean's ways out: an \texttt{unsafe}
+definition, or a binding to code outside Lean. So an implementation may give
+\texttt{pure "Name"} as evidence. \texttt{make selfhost-check} walks everything the function can
+reach in the built program, through the compiled code of each \texttt{partial} definition too, and
+fails on any way out. The logic tools and \texttt{reduce\_run} reach 1{,}535 of LeanFM's definitions
+and pass, with one declared exception: a cache keyed by memory address, which changes only how much
+work is repeated.
 
 A requirement an implementation does not name counts as sorry for it. The shop:
 

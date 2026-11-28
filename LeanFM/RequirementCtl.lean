@@ -208,6 +208,23 @@ def proofChecked (name : String) (proofs : Option Json) : Checked :=
       else { verdict := "proof", met := true,
              reading := s!"proof {name}: checked by Lean's kernel, free of sorry; its axioms: {if axioms.isEmpty then "none" else ", ".intercalate axioms}" }
 
+/-- Pure evidence (selfhost.requirements.proofs): ProofCheck.lean's walk of what the function can reach,
+read from proofs.json under `pure Name`. -/
+def pureChecked (name : String) (proofs : Option Json) : Checked :=
+  match proofs with
+  | none => { verdict := "sorry", usesSorry := true, reading := s!"pure {name}: not checked (no proofs.json beside the implementation; make selfhost-check writes it)" }
+  | some j =>
+    match j.getObjVal? s!"pure {name}" with
+    | .error _ => { verdict := "sorry", usesSorry := true, reading := s!"pure {name}: proofs.json has no line for it; make selfhost-check checks it" }
+    | .ok line =>
+      let strs (k : String) := ((line.getObjValD k).getArr?).toOption.getD #[] |>.toList.filterMap (·.getStr?.toOption)
+      let reached := (line.getObjValD "reached").getNat?.toOption.getD 0
+      if (line.getObjValD "exists") != Json.bool true then failed s!"pure {name}: no such function in the built environment"
+      else if !(strs "problems").isEmpty then failed s!"pure {name}: {"; ".intercalate (strs "problems")}"
+      else { verdict := "proof", met := true,
+             reading := s!"pure {name}: the {reached} LeanFM definitions it can reach take none of Lean's ways out of purity (no IO in a type, nothing unsafe, extern or implemented outside LeanFM)" ++
+               (if (strs "exceptions").isEmpty then "" else s!"; declared exceptions: {"; ".intercalate (strs "exceptions")}") }
+
 /-- A named test with no run: sorry, since only a run judged against the requirement counts as tested. -/
 def testChecked (name : String) : Checked :=
   { verdict := "sorry", usesSorry := true,

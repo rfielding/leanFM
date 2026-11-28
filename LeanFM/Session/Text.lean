@@ -125,6 +125,9 @@ inductive Evidence where
   | test (name : String)
   /-- a Lean theorem, checked by the kernel when the project builds (selfhost.requirements.proofs) -/
   | proof (name : String)
+  /-- a function whose reachable code takes none of Lean's ways out of purity, checked over the built
+  environment (selfhost.requirements.proofs) -/
+  | purity (name : String)
   | pointer (p : Pointer)
   deriving Inhabited, Repr, BEq
 
@@ -1094,6 +1097,8 @@ def implementationDecl (body : Lean.Syntax) : R ImplDef := do
           match ev[1].isStrLit? with | some t => pure (Evidence.test t) | none => failAt ev "test \"name\""
         else if w.isAtom && w.getAtomVal == "proof" then
           match ev[1].isStrLit? with | some t => pure (Evidence.proof t) | none => failAt ev "proof \"Theorem.name\""
+        else if w.isAtom && w.getAtomVal == "pure" then
+          match ev[1].isStrLit? with | some t => pure (Evidence.purity t) | none => failAt ev "pure \"Function.name\""
         else pure (Evidence.pointer (← pointerOf w))
       d := { d with entries := d.entries ++ [(k, v)] }
     else if a.isAtom && a.getAtomVal == "hint" then
