@@ -439,10 +439,14 @@ partial def render : Value → Json
 def esc (s : String) : String :=
   s.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;" |>.replace "\"" "&quot;"
 
+/-- A number to two decimals, without trailing zeros: 28.57, 50, 0.5. -/
 def fmt (x : Float) : String :=
   let r := Float.round (x * 100) / 100
   let s := toString r
-  if s.endsWith ".000000" then (s.dropEnd 7).toString else s
+  if s.contains '.' then
+    let t := (s.toList.reverse.dropWhile (· == '0')).reverse
+    String.ofList (if t.getLast? == some '.' then t.dropLast else t)
+  else s
 
 def pi : Float := 3.141592653589793
 
@@ -462,7 +466,7 @@ def svg (spec : Json) (dark : Bool) : String := Id.run do
   let title := esc ((spec.getObjValAs? String "title").toOption.getD "")
   let data := ((spec.getObjValD "data").getArr?).toOption.getD #[]
   let w := 640.0; let h := 360.0
-  let mut out := s!"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 640 360\" role=\"img\" aria-label=\"{title}\"><rect width=\"640\" height=\"360\" fill=\"{bg}\"/><text x=\"20\" y=\"24\" fill=\"{fg}\" font-family=\"sans-serif\" font-size=\"16\">{title}</text>"
+  let mut out := s!"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"360\" viewBox=\"0 0 640 360\" role=\"img\" aria-label=\"{title}\"><rect width=\"640\" height=\"360\" fill=\"{bg}\"/><text x=\"20\" y=\"24\" fill=\"{fg}\" font-family=\"sans-serif\" font-size=\"16\">{title}</text>"
   if kind == "pie" then
     let vals := data.map (getF · "value")
     let total := vals.foldl (· + ·) 0

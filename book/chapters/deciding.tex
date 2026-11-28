@@ -43,11 +43,11 @@ through pairs of nodes with equal labels that the refinement keeps apart, from t
 starts, for the first pair whose labels or next labels differ, and reports the path to
 it. A candidate that never answers 404:
 
-\input{generated/ctl-images-no404.tex}
+\ToolOutput{generated/ctl-images-no404.tex}
 
 A GoServer whose refused sign-in falls through to the room instead of retrying:
 
-\input{generated/ctl-goserver-mutant.tex}
+\ToolOutput{generated/ctl-goserver-mutant.tex}
 
 And the classic pair that no comparison of traces can separate: a choice between ``a then
 b'' and ``a then c'', against ``a, then a choice of b or c''. Both produce exactly the traces
@@ -55,7 +55,7 @@ a b and a c, yet after a the first has already chosen and the second has not. CT
 them apart: \texttt{(someNext (allNext (on b)))}, ``some first step leaves b as the only
 next message'', holds of the first and not the second.
 
-\input{generated/ctl-branching.tex}
+\ToolOutput{generated/ctl-branching.tex}
 
 \section{Evaluating a CTL formula}
 
@@ -124,7 +124,7 @@ as a tree gives it back as an s-expression with its shared parts labelled.
 
 \begin{table}[ht]
 \centering
-\input{generated/ctl-corpus.tex}
+\ToolOutput{generated/ctl-corpus.tex}
 \caption{Faithful CTL of the protocols in this repository: checker nodes, typestates,
 lookahead, rules (one per typestate and one for the start) and whether the typestates
 are deterministic.}

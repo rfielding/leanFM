@@ -59,9 +59,18 @@
 % and payload remain unambiguous without relying on the arrow graphic.
 % A diagram LeanFM drew in both themes (generated/NAME-light.pdf and generated/NAME-dark.pdf,
 % made by scripts/svg_to_pdf.py): the light one in main.pdf, the dark one in main-dark.pdf.
-\newcommand{\ThemedDiagram}[2]{%
+\newcommand{\ThemedDiagramBare}[2]{%
   \ifdefined\darkmode\includegraphics[#1]{generated/#2-dark.pdf}%
   \else\includegraphics[#1]{generated/#2-light.pdf}\fi}
+% Every drawn diagram is a tool's output, so it gets the double border, shrunk by the border's
+% width so the whole keeps the size asked for.
+\newsavebox{\diagrambox}
+\newcommand{\ThemedDiagram}[2]{%
+  \sbox{\diagrambox}{\ThemedDiagramBare{#1}{#2}}%
+  \begingroup\setlength{\fboxrule}{.4pt}%
+  \setlength{\fboxsep}{1.5pt}\fcolorbox{toolrule}{pagebackground}{%
+  \setlength{\fboxsep}{2pt}\fcolorbox{toolrule}{pagebackground}{%
+  \resizebox{\dimexpr\wd\diagrambox-8.6pt\relax}{!}{\usebox{\diagrambox}}}}\endgroup}
 \newcommand{\AccessibleFigure}[2]{%
   \tagstructbegin{tag=Figure,alttext={#1}}%
   \tagmcbegin{tag=Figure}#2\tagmcend%
@@ -216,9 +225,16 @@
            {Σ}{{$\Sigma$}}1
            {Ω}{{$\Omega$}}1,
   frame=single,
+  rulecolor=\color{leanblue},
   breaklines=true,
   showstringspaces=false
 }
+% Two borders: a single blue rule around a source someone wrote (a protocol, a requirement, a
+% program), a double gray rule around what a tool answered from it (a verdict, a value, a
+% diagram). \ToolOutput{file} inputs a generated file with its listings in the output style.
+\definecolor{toolrule}{RGB}{128,128,128}
+\lstdefinestyle{tooloutput}{frame=TRBL,rulecolor=\color{toolrule},rulesep=1.5pt,framerule=.4pt}
+\newcommand{\ToolOutput}[1]{\begingroup\lstset{style=tooloutput}\input{#1}\endgroup}
 
 % No numbered Theorem/Lemma/Definition: a block is a paragraph with a bold run-in title when it
 % has a name, and a proof is a paragraph that starts "Why." A reference names the idea and its
@@ -362,6 +378,18 @@ branching futures, and LTL, which speaks only of every path, cannot make it. Thi
 requirements need CTL. Plain \texttt{(always (implies a b))} is neither: when \texttt{a} cannot
 happen, LeanFM reports it as vacuous, not proved.}}
 \medskip
+
+\noindent\textbf{Reading the boxes.} A single blue rule surrounds a \emph{source}: something a
+person or an agent wrote, such as a protocol, a requirement or a program.
+\begin{lstlisting}[language={}]
+(always (<= refundRate 1/20))
+\end{lstlisting}
+A double gray rule surrounds what a \emph{tool} answered from a source: a verdict, a value, a
+counterexample or a diagram. Nothing inside a double rule was typed by hand.
+\begin{lstlisting}[language={},style=tooloutput]
+refundRate  =>  1/3
+\end{lstlisting}
+
 
 The book's central result joins the halves: a protocol \emph{is} a short list of claims,
 one per moment the conversation can be in, and a system obeys the claims exactly when it

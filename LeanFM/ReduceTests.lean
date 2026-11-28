@@ -87,6 +87,7 @@ def bookExample := include_str "../book/examples/shop.reduce"
 #guard match check (Json.mkObj [("program", "(+ 1 2)"), ("events", shop)]) 4 with
   | .ok j => j.getObjValD "ticks" == toJson (4 : Nat) | .error _ => false
 #guard (check (Json.mkObj [("program", "(+ 1 (+ 2 3))"), ("events", shop)]) 3).toOption.isNone
+#guard [fmt 28.571428, fmt 50, fmt 0.5, fmt 1240] == ["28.57", "50", "0.5", "1240"]
 #guard parseTicks (some "abc") |>.toOption |>.isNone
 #guard match parseTicks none with | .ok n => n == defaultTicks | .error _ => false
 #guard match parseTicks (some "5000") with | .ok n => n == 5000 | .error _ => false

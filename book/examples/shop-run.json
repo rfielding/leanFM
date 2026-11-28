@@ -1,0 +1,10 @@
+[
+  {"id": "o1", "label": "Order",   "t": 0, "body": {"item": "tea"}},
+  {"id": "p1", "label": "Pay",     "t": 1, "body": {"amount": 10}, "cause": "o1"},
+  {"id": "r1", "label": "Receipt", "t": 2, "body": {"amount": 10}, "cause": "p1"},
+  {"id": "o2", "label": "Order",   "t": 3, "body": {"item": "cake"}},
+  {"id": "p2", "label": "Pay",     "t": 4, "body": {"amount": 25}, "cause": "o2"},
+  {"id": "r2", "label": "Receipt", "t": 5, "body": {"amount": 25}, "cause": "p2"},
+  {"id": "f2", "label": "Refund",  "t": 6, "body": {"amount": 25}, "cause": "p2"},
+  {"id": "o3", "label": "Order",   "t": 7, "body": {"item": "tea"}}
+]

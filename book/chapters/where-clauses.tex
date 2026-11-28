@@ -17,7 +17,7 @@ where clause on the values the log carries. Here the client pays 12 against a qu
 of 10:
 
 \input{generated/ctl-where-log.tex}
-\input{generated/ctl-where.tex}
+\ToolOutput{generated/ctl-where.tex}
 
 The order of the three messages is one the protocol allows. The data is not. A
 where clause is therefore a second, independent check on a run: the first asks whether
@@ -40,7 +40,7 @@ to its request, and fields the protocol marks as identities join the events that
 the same value. Two image requests interleaved, with no session ids at all:
 
 \input{generated/ctl-interleaved-log.tex}
-\input{generated/ctl-interleaved.tex}
+\ToolOutput{generated/ctl-interleaved.tex}
 
 The causes are enough. In general the derivation is a union-find over the log: each
 cause joins two events, each declared key joins the events that carry its value, and
@@ -68,7 +68,7 @@ session. A seat is \texttt{given sessionId gameId}: it names two sessions that a
 parent and child, so it is a \emph{join}. LeanFM reads that shape from the text alone
 and checks a real log of two people playing against it:
 
-\input{generated/ctl-goserver-conform.tex}
+\ToolOutput{generated/ctl-goserver-conform.tex}
 
 The log carries no session ids. LeanFM found the two people's sessions, the game as a
 child of the first person's session, and each seat and move as a join of a person and

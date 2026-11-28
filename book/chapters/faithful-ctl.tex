@@ -121,7 +121,7 @@ more; a name that labels $n$ of them needs $\lceil \log_2 n \rceil$ bits, in a f
 cause, or remembered by every participant. For Retry, from the same count \texttt{session\_ctl}
 answers as \texttt{bits}:
 \begin{center}
-\input{generated/ctl-retry-bits.tex}
+\ToolOutput{generated/ctl-retry-bits.tex}
 \end{center}
 Ask and Busy each need two bits: the try counter. Lookahead $4$ is what it costs to leave
 those bits off the wire and recover them from what follows. Images needs none: its names are
@@ -219,7 +219,7 @@ satisfy the rules fails a formula the protocol satisfies.
 LeanFM writes the rules with \texttt{session\_ctl} and \texttt{faithful: "rules"}. For
 Images, with lookahead $0$, every name is a label and an ending:
 
-\input{generated/ctl-images-rules.tex}
+\ToolOutput{generated/ctl-images-rules.tex}
 
 The row \texttt{(transition GetImage (Image stop) (NotFound stop))} is the sentence this
 chapter began with. The two \texttt{final} rows are the ended typestates: once an answer has
@@ -227,7 +227,7 @@ arrived, nothing else happens.
 
 \section{A larger protocol}
 
-PlaceOrder has \input{generated/ctl-placeorder-counts.tex}\unskip. Its typestate graph is again
+PlaceOrder has \ToolOutput{generated/ctl-placeorder-counts.tex}\unskip. Its typestate graph is again
 computed rather than drawn.
 
 \begin{figure}[ht]
@@ -237,7 +237,7 @@ computed rather than drawn.
 \label{fig:placeorder-ts}
 \end{figure}
 
-\input{generated/ctl-placeorder-rules.tex}
+\ToolOutput{generated/ctl-placeorder-rules.tex}
 
 \section{What the rules buy}
 

@@ -75,7 +75,7 @@ For Images that is four typestates:
 
 and LeanFM writes them out as a transition table, one rule per typestate, each a formula:
 
-\input{generated/ctl-images-rules.tex}
+\ToolOutput{generated/ctl-images-rules.tex}
 
 Read it like code. \texttt{start}: the conversation begins before any message.
 \texttt{(transition start GetImage)}: from there, GetImage comes next and nothing else.
@@ -197,7 +197,7 @@ To check formulas, write the protocol's states down the side and the formulas ac
 top, and fill in each cell: does this formula hold at this state? Here is Images with six
 formulas, as LeanFM's evaluator fills it in:
 
-\input{generated/ctl-images-truth.tex}
+\ToolOutput{generated/ctl-images-truth.tex}
 
 Each column follows from columns already filled in. (1) and (2) are read off the labels.
 (3) looks one row ahead: it is true just after GetImage because a NotFound can come next,
@@ -298,13 +298,13 @@ state is stuck. Two pairs of roles that never talk cannot be held to the protoco
 between them:
 
 \input{generated/ctl-realizable-pairs.tex}
-\input{generated/ctl-realizable-pairs-answer.tex}
+\ToolOutput{generated/ctl-realizable-pairs-answer.tex}
 
 and a buffer makes deadlocks possible that a rendezvous rules out. Here B must take X and then
 Y, but C can fill B's one-slot inbox with Y first; then A cannot put X in, and B cannot take Y:
 
 \input{generated/ctl-realizable-jam.tex}
-\input{generated/ctl-realizable-jam-answer.tex}
+\ToolOutput{generated/ctl-realizable-jam-answer.tex}
 
 With B's inbox at size 0 the same protocol is realizable, since C cannot hand Y over until B
 takes it. The protocol text stays the specification: inbox sizes change this one answer and
@@ -372,14 +372,14 @@ protocol GuineaPigCage (Arduino, Dispenser, Webcam, Hub) {
 }
 \end{lstlisting}
 Each event carries its measurements in its payload. Here is the start of the log, which is
-simulated for the book (three days, \input{generated/sig-counts.tex}; the whole log is
+simulated for the book (three days, \ToolOutput{generated/sig-counts.tex}; the whole log is
 \texttt{examples/guinea-pigs/cage.log}):
 
 \input{generated/sig-log.tex}
 
 The order of the events is checked as for any protocol, and the devices are still running:
 
-\input{generated/sig-conform.tex}
+\ToolOutput{generated/sig-conform.tex}
 
 What we require of the cage, written as claims:
 
@@ -409,7 +409,7 @@ answers these four over the three days:
 
 \begin{center}
 \small
-\input{generated/sig-results.tex}
+\ToolOutput{generated/sig-results.tex}
 \end{center}
 
 \begin{figure}[ht]
@@ -427,7 +427,7 @@ Each answer says what happened. The afternoon sun on day 2 took the cage to 27.1
 with 71\,ml to spare. The webcam claim fails only at the very last reading, and that is the
 log's fault, not the guinea pigs': the log ends during their quietest hour, so the two-hour
 window after its last readings runs past the end. \texttt{check\_signal} counts such moments
-(\input{generated/sig-cut.tex} here) rather than guessing what came next, so a reader knows
+(\ToolOutput{generated/sig-cut.tex} here) rather than guessing what came next, so a reader knows
 to trust the verdict only up to two hours before the end.
 
 Checking stays linear. Each word is one pass over the readings: a window is a sliding maximum or

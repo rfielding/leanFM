@@ -246,6 +246,8 @@ book: lean
 	python3 scripts/svg_to_pdf.py book/generated/req-*.svg
 	lake env lean --run SignalChapterExample.lean
 	python3 scripts/svg_to_pdf.py book/generated/sig-*.svg
+	lake env lean --run RunChapterExample.lean
+	python3 scripts/svg_to_pdf.py book/generated/run-*.svg
 	lake env lean --run BookListingsCheck.lean
 	$(MAKE) -C book
 

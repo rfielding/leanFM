@@ -28,7 +28,7 @@ map that names every requirement and points at what it means:
 Each entry converts to CTL and is decided. Here is what each one requires, as the CTL
 LeanFM writes for it and as LeanFM reads that formula back, with the verdict:
 
-\input{generated/req-orders-explained.tex}
+\ToolOutput{generated/req-orders-explained.tex}
 
 A pointer is one of three kinds:
 
@@ -104,7 +104,7 @@ hint claims no behaviour, so it converts to \emph{true}, honestly, and never war
 
 What each entry means and how it stands:
 
-\input{generated/req-orders-impl-explained.tex}
+\ToolOutput{generated/req-orders-impl-explained.tex}
 
 \section{Where it runs}
 \label{sec:deployment}
@@ -129,7 +129,7 @@ reply travels back over the link its request opened, by the rule that dashes rep
 sequence diagram, so the client needs no interface of its own. Each link then carries the
 conditions its kind and placement add (Figure~\ref{fig:deployment} draws them):
 
-\input{generated/req-deployment-links.tex}
+\ToolOutput{generated/req-deployment-links.tex}
 
 \begin{figure}[ht]\centering
 \AccessibleFigure{Deployment view of ShopImpl. Client is outside. Api and Db are on machine m1 in datacenter dc1 of island us. Bank is in the replicated group ledger of island eu. Six numbered links: Client to Api over us.Api.ingress.https and hostile; Api to Db and its replies over us.Db.local.sql adding nothing; Api to Client as replies over the same https link; Api to Bank over eu.Bank.peering.api with partition; and Bank's replies over it.}{\ThemedDiagram{width=\textwidth}{req-deployment}}
@@ -142,7 +142,7 @@ deployment, a request from anyone and a bank that may not answer, and they are r
 implementation to handle. A message no interface lets through is an error. Leaving the bank only
 its internal interface:
 
-\input{generated/req-deployment-refused.tex}
+\ToolOutput{generated/req-deployment-refused.tex}
 
 Nothing in the protocol changed. A deployment adds no message and moves none; \texttt{choice},
 \texttt{parallel}, \texttt{include} and \texttt{sessions} mean what they meant, and a replicated
@@ -198,22 +198,26 @@ since the answer may still come, and \texttt{always} presumably true. A complete
 whole run, so there they are definite. A requirement is tested when its value is true or
 presumably true, and failing when it is false.
 
-The two implications from the Preface behave as they should. A feature,
-\texttt{(stronglyImplies (on Call) (inevitably (on Answer)))}, is not tested by a run with no
-Call, because \texttt{possibly (on Call)} is not shown. A complete run with a Call and no Answer
-refutes it, and the counterexample is the run up to that Call. A guarantee,
-\texttt{(weaklyImplies (on OpenDoor) (on Password))}, is tested by a run in which the door never
-opens, and the answer says its trigger never happened.
+The two implications from the Preface behave as they should. Here is RunCheck's judgement of a
+feature, a guarantee and a possibility on short runs:
 
-A bare test name gives no run to judge, so it is sorry. LeanFM's own first tested requirement
+\ToolOutput{generated/run-judgements.tex}
+
+The feature is not tested by a run with no Call, because \texttt{possibly (on Call)} is not
+shown. A complete run with a Call and no Answer refutes it. The counterexample is that whole run,
+since only its end shows that no Answer will come. The guarantee is tested by a run with no
+withdrawal, and the answer says its trigger never happened. One run with a refund shows the
+possibility; a run without one only fails to show it.
+
+{\sloppy A bare test name gives no run to judge, so it is sorry. LeanFM's own first tested requirement
 is \emph{Every MCP request a server takes is answered}: \texttt{make run-log-check} drives
 \texttt{leanfm-mcp} as any MCP client would, writes one Call and one Answer per request to
 \texttt{LeanFM/LLMGenerated/runs/mcp-call.jsonl}, and the implementation names that log with
-\texttt{conform}. Its formula is also proved over McpCall, so it stands proved.
+\texttt{conform}. Its formula is also proved over McpCall, so it stands proved.\par}
 
 A requirement an implementation does not name counts as sorry for it. The shop:
 
-\input{generated/req-orders-summary.tex}
+\ToolOutput{generated/req-orders-summary.tex}
 
 \section{LeanFM's own lists}
 
@@ -222,7 +226,7 @@ map ends \texttt{LeanFM.leanfm}, over its own MCP protocol. Its implementation i
 \texttt{LeanFMImplementation.leanfm}. The clauses of \texttt{SelfHosting.lean}, which are
 still prose, join its list as sorry entries:\par}
 
-\input{generated/req-leanfm-summary.tex}
+\ToolOutput{generated/req-leanfm-summary.tex}
 
 \section{The gate and the viewers}
 

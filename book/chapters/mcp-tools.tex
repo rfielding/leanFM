@@ -33,7 +33,7 @@ the protocol's logs.
 
 \section{The tools}
 
-\input{generated/ctl-mcp-tools.tex}
+\ToolOutput{generated/ctl-mcp-tools.tex}
 
 The session tools take a protocol as \texttt{lean} (LeanFM protocol text), as
 \texttt{example} (a protocol the server carries, such as \texttt{goserver}) or as
@@ -45,7 +45,7 @@ a canonical id or an inline draft of states and transitions.
 The first call on any new protocol is \texttt{session\_check}: projection and
 well-formedness (Chapter~\ref{ch:projection}).
 
-\input{generated/ctl-mcp-check.tex}
+\ToolOutput{generated/ctl-mcp-check.tex}
 
 \section{Does a property hold?}
 
@@ -53,23 +53,23 @@ well-formedness (Chapter~\ref{ch:projection}).
 model (Chapter~\ref{ch:checker}). The formula may be JSON or an s-expression. Every
 image request is answered:
 
-\input{generated/ctl-mcp-ctl.tex}
+\ToolOutput{generated/ctl-mcp-ctl.tex}
 
 A property that does not hold comes back with the path that breaks it. The server is
 not obliged to answer with an image:
 
-\input{generated/ctl-mcp-ctl-disproved.tex}
+\ToolOutput{generated/ctl-mcp-ctl-disproved.tex}
 
 Order is a property too. No NotFound comes before the request it answers:
 
-\input{generated/ctl-mcp-ctl-order.tex}
+\ToolOutput{generated/ctl-mcp-ctl-order.tex}
 
 \section{What should I ask?}
 
 Without a formula, \texttt{session\_ctl} builds properties from the protocol and decides
 each. For PlaceOrder:
 
-\input{generated/ctl-mcp-suggest.tex}
+\ToolOutput{generated/ctl-mcp-suggest.tex}
 
 Two are disproved, and both are informative. A purchase always ends, so ``some session
 can run forever'' is false, which is what was wanted. ``No secret is ever sent'' is
@@ -84,7 +84,7 @@ same way. A suggestion is a question the protocol answers, not a rule it must ke
 of Chapter~\ref{ch:faithful}, each as an s-expression with its shared parts labelled and,
 when it is small, in CTL notation:
 
-\input{generated/ctl-mcp-rules.tex}
+\ToolOutput{generated/ctl-mcp-rules.tex}
 
 \section{Is this implementation faithful?}
 
@@ -92,7 +92,7 @@ when it is small, in CTL notation:
 one reconstructed from an implementation) or \texttt{lean} (another protocol text)
 decides faithfulness as one bisimulation check and, when it fails, names where:
 
-\input{generated/ctl-mcp-faithful.tex}
+\ToolOutput{generated/ctl-mcp-faithful.tex}
 
 \section{What may happen next?}
 
@@ -100,21 +100,21 @@ decides faithfulness as one bisimulation check and, when it fails, names where:
 protocol allows next, with the event each must name as its cause. It is what a server
 uses to decide whether to accept an incoming message.
 
-\input{generated/ctl-mcp-next.tex}
+\ToolOutput{generated/ctl-mcp-next.tex}
 
 \section{A formula with shared parts}
 
 \texttt{check\_ctl} decides a formula over an inline draft. Written as an s-expression,
 a part used twice is written once:
 
-\input{generated/ctl-mcp-checkctl.tex}
+\ToolOutput{generated/ctl-mcp-checkctl.tex}
 
 \section{Does this log follow the protocol?}
 
 \texttt{session\_conform} replays a log, derives its sessions when the log does not name
 them, and checks the where clauses on the values (Chapter~\ref{ch:where}):
 
-\input{generated/ctl-mcp-conform.tex}
+\ToolOutput{generated/ctl-mcp-conform.tex}
 
 \section{What interface does it imply?}
 
@@ -122,7 +122,7 @@ them, and checks the where clauses on the values (Chapter~\ref{ch:where}):
 (Section~\ref{sec:openapi} shows the whole document for Images); requests without a
 route are listed as unrouted rather than guessed:
 
-\input{generated/ctl-mcp-openapi.tex}
+\ToolOutput{generated/ctl-mcp-openapi.tex}
 
 \section{When an answer stops at a limit}
 
@@ -132,12 +132,12 @@ server's instructions list with their defaults. A limit is a warning, not a wall
 answer that stops at one names it and says how to raise it; here the limit is set
 absurdly low to show the refusal:
 
-\input{generated/ctl-mcp-limits-low.tex}
+\ToolOutput{generated/ctl-mcp-limits-low.tex}
 
 Every tool takes the optional \texttt{limits} argument, for that call only. With the
 limit raised, the answer says what was used:
 
-\input{generated/ctl-mcp-limits-high.tex}
+\ToolOutput{generated/ctl-mcp-limits-high.tex}
 
 The operator caps what a call may ask for with \texttt{LEANFM\_LIMIT\_CEILING}, a
 factor over each default (100 unless set), and a request past it is capped and says
@@ -150,7 +150,7 @@ The logic tools work on drafts and traces rather than protocol text: they explai
 formula, classify a requirement as observable or not, check a trace of events with
 causes, and say what an actor can derive from the messages it has seen.
 
-\input{generated/mcp-logic-examples.tex}
+\ToolOutput{generated/mcp-logic-examples.tex}
 
 \section{How much money did we make?}
 
@@ -162,8 +162,19 @@ Over the shop's run:
 
 \lstinputlisting[language={}]{examples/shop.reduce}
 
-This gives 10 dollars kept, a refund rate of \texttt{1/3}, and a pie of where the money went. The
-same reducers can then be required of the data, as in ``refunds stay under 5\% of orders''.
+The run is \texttt{book/examples/shop-run.json}: three orders, two paid, one of those refunded.
+\texttt{reduce\_run} answers each output form:
+
+\ToolOutput{generated/run-shop-outputs.tex}
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Pie chart of where the money went: 10 dollars kept which is about 29 percent and 25 dollars refunded which is about 71 percent.}{\ThemedDiagram{width=.7\textwidth}{run-shop-pie}}
+\caption{The shop's money, as \texttt{reduce\_run} draws it from the program above.}
+\end{figure}
+
+The same reducers can then be required of the data, as in ``refunds stay under 5\% of orders''.
+This shop's refund rate of \texttt{1/3} would fail that.
 
 The language is sandboxed. It has a fixed list of names and no files, clock, network or
 \texttt{eval}. Each danger is named as a \emph{hazard} in
@@ -176,4 +187,11 @@ the control works:
 \item a division by zero is refused.
 \end{itemize}
 Hazards with no control yet, such as a disk filled by logs, are listed as open rather than left
-unsaid.
+unsaid. The registry, as the specification check reads it:
+
+\begingroup\footnotesize
+\input{generated/run-hazards.tex}
+\endgroup
+
+A hazard is named the way a requirement is: once it has a name, an implementation can be found
+that eliminates or bounds it, and a test can show that it does.

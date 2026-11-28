@@ -62,7 +62,7 @@ The \texttt{route} and \texttt{status} lines make Images an HTTP interface, and 
 writes it in the standard everyone already reads: an OpenAPI~3.1 (Swagger) document
 for the Server, the role that receives requests.
 
-\input{generated/ctl-images-openapi.tex}
+\ToolOutput{generated/ctl-images-openapi.tex}
 
 Each request is an operation under its route; its answers are responses under their
 statuses. The Image is \texttt{image/png} bytes of at most 5{,}000{,}000 bytes, with
@@ -73,7 +73,7 @@ server sent a \texttt{Content-Length} that does not match the bytes:
 
 \input{generated/ctl-images-size-log.tex}
 
-\input{generated/ctl-images-size.tex}
+\ToolOutput{generated/ctl-images-size.tex}
 The \texttt{\{id\}} in the route is a path parameter. Load the document into Swagger UI
 or any OpenAPI generator and you have the server's stubs and a client, in whatever
 language those tools support. The point of this book is what the OpenAPI document
@@ -110,7 +110,7 @@ every log needs (who sent it, to whom, and the event it answers). So the same
 protocol drives an HTTP service, a gRPC or raw-socket one, and the log both are
 checked against.
 
-\input{generated/ctl-placeorder-proto.tex}
+\ToolOutput{generated/ctl-placeorder-proto.tex}
 
 \section{The constructs}
 
@@ -177,7 +177,7 @@ messages carry the field under the site's name \texttt{sid} instead of \texttt{t
 That is not an informal claim. LeanFM decides it by comparing the two (the faithfulness
 check of Chapter~\ref{ch:faithful}):
 
-\input{generated/ctl-include-faithful.tex}
+\ToolOutput{generated/ctl-include-faithful.tex}
 
 \begin{figure}[ht]
 \centering

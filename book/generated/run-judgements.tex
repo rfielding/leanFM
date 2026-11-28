@@ -1,0 +1,16 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+a feature: (stronglyImplies (on Call) (inevitably (on Answer)))
+  no Call [Hello; complete]: presumably false, not shown yet
+  answered [Call, Answer; complete]: presumably true, tested
+  unanswered [Hello, Call, Bye; complete]: false, failing; counterexample: the first 3 events (Hello, Call, Bye)
+  still running [Call; running]: presumably false, not shown yet
+
+a guarantee: (weaklyImplies (on Withdraw) (eventually (on Audit)))
+  no withdrawal [Login, Logout; complete]: presumably true, tested; its trigger never happened
+  audited [Withdraw, Audit; complete]: presumably true, tested
+  never audited [Withdraw, Logout; complete]: false, failing; counterexample: the first 2 events (Withdraw, Logout)
+
+a possibility: (possibly (on Refund))
+  with a refund [Pay, Refund; complete]: true, tested
+  without [Pay; complete]: presumably false, not shown yet
+\end{lstlisting}

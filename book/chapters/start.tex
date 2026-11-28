@@ -55,14 +55,14 @@ LeanFM checks the text and draws it (Figure~\ref{fig:ttt}).
 
 Then Claude asks the question every game must answer: does it always end? LeanFM says no, and
 shows the run that does not:
-\input{generated/ctl-tictactoe-draft-ends.tex}
+\ToolOutput{generated/ctl-tictactoe-draft-ends.tex}
 The players can trade moves forever. Nothing in the draft says the board fills up. But it
 does: nine squares, X first, so X moves at most five times. One phrase says that, and one
 block says what happens when a fifth round would go on:
 \input{generated/ctl-tictactoe.tex}
 Now every requirement Claude wrote down is decided:
 \begin{center}
-\input{generated/ctl-tictactoe-checks.tex}
+\ToolOutput{generated/ctl-tictactoe-checks.tex}
 \end{center}
 
 \section{What just happened}

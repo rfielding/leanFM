@@ -1,0 +1,19 @@
+\begin{longtable}{@{}p{.27\textwidth}p{.12\textwidth}p{.55\textwidth}@{}}
+\toprule
+hazard & status & never \\
+\midrule
+\endhead
+\texttt{reduce.runaway} & mitigated & a program runs past its tick budget \\
+\texttt{reduce.stack} & mitigated & a program nests more than maxDepth (10000) calls \\
+\texttt{reduce.bignum} & mitigated & a program holds a number whose numerator or denominator exceeds maxBits (4096) bits \\
+\texttt{reduce.divide-by-zero} & mitigated & a division by zero answered as a number \\
+\texttt{reduce.code-execution} & mitigated & submitted logic runs as code (required proof Submitted logic never runs as code) \\
+\texttt{reduce.input-size} & mitigated & a run over reduceEvents events, or arguments over argumentBytes, is read \\
+\texttt{reduce.output-size} & mitigated & a chart over maxPoints (2000) points drawn whole \\
+\texttt{path.escape} & mitigated & the server reads a file outside the project root it was asked about \\
+\texttt{connections.exhaustion} & mitigated & more than LEANFM\_MAX\_CONNECTIONS connections are open at once \\
+\texttt{request.size} & mitigated & a body over requestBytes is read \\
+\texttt{disk.exhaustion} & open & a LeanFM process fills the disk \\
+\texttt{files.handles} & open & a request fails because the process ran out of file handles \\
+\bottomrule
+\end{longtable}

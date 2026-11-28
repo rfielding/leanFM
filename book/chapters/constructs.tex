@@ -11,7 +11,7 @@ Here is each construct's smallest protocol, as LeanFM measures it:
 
 \begin{table}[ht]
 \centering
-\input{generated/ctl-constructs.tex}
+\ToolOutput{generated/ctl-constructs.tex}
 \caption{Each construct's smallest protocol: checker nodes (states before merging),
 typestates, lookahead, and whether its typestates are deterministic
 (Section~\ref{def:det}).}
@@ -81,16 +81,16 @@ So Retry has lookahead $4$, and its names have to describe four steps of future.
 out as a tree, a name repeats every part it uses at every branch, so it roughly doubles with
 each step. Written with shared parts, each part appears once:
 
-\input{generated/ctl-retry-sizes.tex}
+\ToolOutput{generated/ctl-retry-sizes.tex}
 
 \noindent Here is the start typestate's name with its shared parts labelled
 (\texttt{\#3=} defines a part, \texttt{\#3\#} uses it again):
 
-\input{generated/ctl-retry-start.tex}
+\ToolOutput{generated/ctl-retry-start.tex}
 
 \noindent and the same name read out by LeanFM, each shared part once:
 
-\input{generated/ctl-retry-start-english.tex}
+\ToolOutput{generated/ctl-retry-start-english.tex}
 
 The rule of thumb: a counter that counts to $c$ costs a lookahead of about $c$. Written as
 trees the names grow exponentially in $c$; with shared parts they grow by a few lines per
